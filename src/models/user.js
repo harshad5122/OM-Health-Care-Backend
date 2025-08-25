@@ -14,7 +14,7 @@ const userSchema = mongoose.Schema({
        countryCode: {
         type: String,
         required: true,
-        match: [/^\+[1-9][0-9]{0,3}$/, "Please enter a valid country code"] // e.g. +91, +1, +44
+        match: [/^\+[1-9][0-9]{0,3}$/, "Please enter a valid country code"] 
     },
     
     phone: {
@@ -50,12 +50,20 @@ const userSchema = mongoose.Schema({
         type: String,
         enum: ["male", "female", "other"]
     },
+    is_online: {
+        type: Boolean,
+        default: false
+    },
+    last_seen: {
+        type: Date,
+        default: Date.now
+    },
     token: {
         type: String
     },
     role: {
         type: Number,
-        enum: [UserTypes.USER, UserTypes.ADMIN],
+        enum: [UserTypes.USER, UserTypes.ADMIN, UserTypes.STAFF],
         required: true
     },
     token: {

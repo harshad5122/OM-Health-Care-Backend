@@ -139,8 +139,17 @@ const createJsonWebTokenForUser = async (user) => {
 const OTP_STORE = new Map();
 
 
+// const genOtp = () =>
+//   otpGenerator.generate(6, { digits: true, upperCase: false, specialChars: false, alphabets: false });
 const genOtp = () =>
-  otpGenerator.generate(6, { digits: true, upperCase: false, specialChars: false, alphabets: false });
+  otpGenerator.generate(6, {
+    digits: true,
+    lowerCaseAlphabets: false,
+    upperCaseAlphabets: false,
+    specialChars: false
+  });
+
+  // otpGenerator.generate(6, { digits: true, upperCase: false, specialChars: false, alphabets: false });
 
 
 const last10Digits = (phoneLike) => {
@@ -148,8 +157,32 @@ const last10Digits = (phoneLike) => {
   return digits.slice(-10);
 };
 
+const logout = async (body, res) => {
+  return new Promise(async () => {
+    try {
+      const userId = body?.userId || null;
+
+      logger.info(`User ${userId || ""} logged out successfully`);
+
+      return responseData.success(
+        res,
+        {},
+        messageConstants.LOGGED_OUT_SUCCESSFULLY || "Logged out successfully"
+      );
+    } catch (err) {
+      logger.error("Logout failed", err);
+      return responseData.fail(
+        res,
+        messageConstants.INTERNAL_SERVER_ERROR,
+        500
+      );
+    }
+  });
+};
+
 
 module.exports = {
     signUp,
-    signIn
+    signIn,
+    logout
 }

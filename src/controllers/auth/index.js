@@ -25,7 +25,19 @@ const signIn = async (req, res) => {
     }
 }
 
+const logout = async (req, res) => {
+    try {
+        const response = await authService.logout(req.body, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} logout API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`logout ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
 module.exports = {
     signUp,
-    signIn
+    signIn,
+    logout
 }

@@ -487,17 +487,17 @@ const updateMessage = async (messageId, data) => {
             }
 
             // Check if message is a text message
-            if (message.message_type !== "text") {
-                logger.error("Only text messages can be edited");
-                return reject("Only text messages can be edited");
-            }
+            // if (message.message_type !== "text") {
+            //     logger.error("Only text messages can be edited");
+            //     return reject("Only text messages can be edited");
+            // }
 
             // Check if message is within 15 minutes of sending
-            const timeElapsed = (Date.now() - new Date(message.created_at)) / 60000; // Convert to minutes
-            if (timeElapsed > 60) {
-                logger.error("Message editing time expired");
-                return reject("Message editing time expired");
-            }
+            // const timeElapsed = (Date.now() - new Date(message.created_at)) / 60000; // Convert to minutes
+            // if (timeElapsed > 60) {
+            //     logger.error("Message editing time expired");
+            //     return reject("Message editing time expired");
+            // }
 
             const updatedMessage = await MessageSchema.findByIdAndUpdate(
                 messageId,

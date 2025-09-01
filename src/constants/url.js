@@ -3,6 +3,7 @@ const urlConstants = {
     // AUTH ROUTES
     USER_SIGNUP: '/auth/signup',
     USER_SIGNIN: '/auth/signin',
+    USER_LOGOUT: '/auth/logout',
 
     // MESSAGE ROUTES
     SEND_MESSAGE: '/message/send',
@@ -20,6 +21,14 @@ const urlConstants = {
     CREATE_ADMIN: '/room/admin/create',
     REMOVE_ADMIN: '/room/admin/remove',
     GET_ROOM_MEMBERS: '/room/members/:roomId',
+
+    // USER ROUTES
+    GET_ADMIN_LIST: '/admin/list',
+    GET_STAFF_LIST:  '/staff/list',
+    GET_USER_LIST:   '/user/list',
+    GET_USER_PROFILE: '/user/profile',
+    UPDATE_USER_PROFILE: '/update/profile',
+
 }
 
 module.exports = urlConstants;

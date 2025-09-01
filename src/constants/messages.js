@@ -17,6 +17,18 @@ const messageConstants = {
     LOGGEDIN_SUCCESSFULLY: "logged in successfully",
     OTP_SENT_SUCCESS: "OTP sent successfully",
     OTP_INVALID: "Invalid or expired OTP",
+    LIST_FETCHED_SUCCESSFULLY: "List Fetched successfully",
+    LIST_NOT_FOUND: "List Not Found",
+    MESSAGE_NOT_FOUND: 'Message not found',
+    MESSAGE_UPDATED_SUCCESS: 'Message updated successfull',
+    MESSAGE_UPDATE_FAILED: 'Failed to message upload',
+    MESSAGE_SAVED_SUCCESS: 'Message saved successfully',
+    MESSAGE_CREATION_FAILED: 'Message creation failed',
+    RECEIVER_NOT_FOUND: 'Receiver id not found',
+    FETCH_SUCCESS: 'Profile Fetched successfull',
+    UPDATE_SUCCESS: 'Profile Update Successfull',
+    LOGGED_OUT_SUCCESSFULLY: 'Logout Successfully',
+    
 }
 
 module.exports = messageConstants;

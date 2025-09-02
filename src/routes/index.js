@@ -7,6 +7,7 @@ const routes = [
     `upload_file`,
     `room`,
     `user`,
+    `staff`,
 ];
 
 routes.forEach((route) => require(`./${route}`)(api));

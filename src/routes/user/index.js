@@ -8,4 +8,6 @@ module.exports = (app) => {
     app.get(urlConstants.GET_USER_LIST, jsonWebToken.validateToken, userController.getUserList);
     app.get(urlConstants.GET_USER_PROFILE, jsonWebToken.validateToken, userController.getUserProfile);
     app.put(urlConstants.UPDATE_USER_PROFILE, jsonWebToken.validateToken, userController.updateUserProfile);
+    app.put(urlConstants.EDIT_USER, jsonWebToken.validateToken, userController.editUser);
+    app.delete(urlConstants.DELETE_USER, jsonWebToken.validateToken, userController.deleteUser);
 }

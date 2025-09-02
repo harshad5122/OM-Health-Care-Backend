@@ -157,11 +157,77 @@ const updateUserProfile = async (req, userDetails, res) => {
     });
 };
 
+const editUser = async (req, userDetails, res) => {
+    return new Promise(async () => {
+        try {
+            // const userId = userDetails?._id;
+            const userId = req.params._id;
+
+            if (!userId) {
+                logger.error("User ID not found in token");
+                return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
+            }
+
+            const updateData = req.body;
+            updateData.updated_at = new Date(); // keep updated timestamp
+
+            const updatedUser = await UserSchema.findByIdAndUpdate(
+                userId,
+                { $set: updateData },
+                { new: true, runValidators: true, select: "-password -__v -token -is_deleted" }
+            );
+
+            if (!updatedUser) {
+                logger.error(`Failed to update user with id: ${userId}`);
+                return responseData.fail(res, messageConstants.UPDATE_FAILED, 400);
+            }
+
+            logger.info(`Updated user profile successfully for userId: ${userId}`);
+            return responseData.success(res, updatedUser, messageConstants.UPDATE_SUCCESS);
+        } catch (error) {
+            logger.error("Error in editUser", error);
+            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+        }
+    });
+};
+
+const deleteUser = async (req, userDetails, res) => {
+    return new Promise(async () => {
+        try {
+            // const userId = userDetails?._id;
+            const userId = req.params._id;
+            if (!userId) {
+                logger.error("User ID not found in token");
+                return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
+            }
+
+            const deletedUser = await UserSchema.findByIdAndUpdate(
+                userId,
+                { $set: { is_deleted: true, updated_at: new Date() } },
+                { new: true }
+            );
+
+            if (!deletedUser) {
+                logger.error(`Failed to delete user with id: ${userId}`);
+                return responseData.fail(res, messageConstants.DELETE_FAILED, 400);
+            }
+
+            logger.info(`User soft deleted successfully with id: ${userId}`);
+            return responseData.success(res, {}, messageConstants.DELETE_SUCCESS);
+        } catch (error) {
+            logger.error("Error in deleteUser", error);
+            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+        }
+    });
+};
+
 module.exports = {
     getAdminList,
     getStaffList,
     getUserList,
     getUserProfile,
-    updateUserProfile
+    updateUserProfile,
+    editUser,
+    deleteUser
 
 };

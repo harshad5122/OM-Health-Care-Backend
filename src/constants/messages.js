@@ -28,6 +28,8 @@ const messageConstants = {
     FETCH_SUCCESS: 'Profile Fetched successfull',
     UPDATE_SUCCESS: 'Profile Update Successfull',
     LOGGED_OUT_SUCCESSFULLY: 'Logout Successfully',
+    DELETE_FAILED: 'User Deleted failed',
+    DELETE_SUCCESS: 'User Deleted Successfull',
     
 }
 

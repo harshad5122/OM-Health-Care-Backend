@@ -11,12 +11,12 @@ const userSchema = mongoose.Schema({
         required: true
     },
 
-       countryCode: {
+    countryCode: {
         type: String,
         required: true,
-        match: [/^\+[1-9][0-9]{0,3}$/, "Please enter a valid country code"] 
+        match: [/^\+[1-9][0-9]{0,3}$/, "Please enter a valid country code"]
     },
-    
+
     phone: {
         type: String,
         required: true,
@@ -33,6 +33,10 @@ const userSchema = mongoose.Schema({
     password: {
         type: String,
         // required: true
+    },
+    dob: {
+        type: Date,
+        required: false
     },
     address: {
         type: String
@@ -68,6 +72,11 @@ const userSchema = mongoose.Schema({
     },
     token: {
         type: String
+    },
+
+    addedByAdmin: {
+        type: Boolean,
+        default: false
     },
     created_at: {
         type: Date,

@@ -30,7 +30,7 @@ const getUserList = async (req, res) => {
         logger.info(`${messageConstants.RESPONSE_FROM} get user list API`, JSON.stringify(response));
         res.send(response);
     } catch (err) {
-        logger.error(`Get Staff list ${messageConstants.API_FAILED}`, err);
+        logger.error(`Get User list ${messageConstants.API_FAILED}`, err);
         res.send(err);
     }
 }
@@ -42,7 +42,7 @@ const getUserProfile = async (req, res) => {
         logger.info(`${messageConstants.RESPONSE_FROM} get user profile API`, JSON.stringify(response));
         res.send(response);
     } catch (err) {
-        logger.error(`Get Staff list ${messageConstants.API_FAILED}`, err);
+        logger.error(`Get User Profile ${messageConstants.API_FAILED}`, err);
         res.send(err);
     }
 }
@@ -53,7 +53,29 @@ const updateUserProfile = async (req, res) => {
         logger.info(`${messageConstants.RESPONSE_FROM} update user profile API`, JSON.stringify(response));
         res.send(response);
     } catch (err) {
-        logger.error(`Get Staff list ${messageConstants.API_FAILED}`, err);
+        logger.error(`Update User Profile ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
+const editUser = async (req, res) => {
+    try {
+        const response = await userService.editUser(req, req?.userDetails, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} edit user API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`Edit User ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
+const deleteUser = async (req, res) => {
+    try {
+        const response = await userService.deleteUser(req, req?.userDetails, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} delete user API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`Delete User ${messageConstants.API_FAILED}`, err);
         res.send(err);
     }
 }
@@ -64,4 +86,6 @@ module.exports = {
     getUserList,
     getUserProfile,
     updateUserProfile,
+    editUser,
+    deleteUser,
 }

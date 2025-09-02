@@ -28,7 +28,14 @@ const urlConstants = {
     GET_USER_LIST:   '/user/list',
     GET_USER_PROFILE: '/user/profile',
     UPDATE_USER_PROFILE: '/update/profile',
+    EDIT_USER: '/edit/user/:_id',
+    DELETE_USER: '/delete/user/:_id',
 
+    //STAFF ROUTES
+    ADD_DOCTOR: '/add/doctor',
+    GET_DOCTOR: '/get/doctor',
+    EDIT_DOCTOR: '/edit/doctor/:_id',
+    DELETE_DOCTOR: '/delete/doctor/:_id',
 }
 
 module.exports = urlConstants;

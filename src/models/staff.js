@@ -57,13 +57,19 @@ const staffSchema = new mongoose.Schema(
         specialization: { type: String },
         occupation: { type: String },
 
-
- workExperience: {
-        professionalStatus: {
+         professionalStatus: {
             type: String,
             enum: ["fresher", "experienced"],
             default: "experienced",
         },
+
+
+ workExperience: {
+        // professionalStatus: {
+        //     type: String,
+        //     enum: ["fresher", "experienced"],
+        //     default: "experienced",
+        // },
         // qualification: { type: String }, 
         // specialization: { type: String },
         // occupation: { type: String },

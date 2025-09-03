@@ -17,8 +17,17 @@ function generateToken(id) {
 async function validateToken(req, res, next, userToken = '') {
     try {
         let jwtSecretKey = process.env.JWT_SECRET_KEY;
-        const token = req.header('authorization') || userToken;
-  
+        // const token = req.header('authorization') || userToken;
+        const authHeader = req.headers.authorization;
+
+        let token = null;
+        if (authHeader != null) token = authHeader.split(" ")[1];
+
+        if (token == null) {
+            throw new CustomError(`Access token is required`, 403);
+        }
+
+
         if (token) {
             const verified = jwt.verify(token, jwtSecretKey);
             if (verified) {

@@ -35,9 +35,22 @@ const logout = async (req, res) => {
         res.send(err);
     }
 }
+const changePassword = async (req, res) => {
+    try {
+        console.log("jjj")
+        const response = await authService.changePassword(req.body, req?.userDetails, res);
+        console.log(response, ">>jjj")
+        logger.info(`${messageConstants.RESPONSE_FROM} change password`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`change password ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
 
 module.exports = {
     signUp,
     signIn,
-    logout
+    logout,
+    changePassword
 }

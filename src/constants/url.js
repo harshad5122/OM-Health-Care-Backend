@@ -4,6 +4,9 @@ const urlConstants = {
     USER_SIGNUP: '/auth/signup',
     USER_SIGNIN: '/auth/signin',
     USER_LOGOUT: '/auth/logout',
+    USER_CHANGE: '/auth/change-password',
+
+
 
     // MESSAGE ROUTES
     SEND_MESSAGE: '/message/send',
@@ -24,12 +27,13 @@ const urlConstants = {
 
     // USER ROUTES
     GET_ADMIN_LIST: '/admin/list',
-    GET_STAFF_LIST:  '/staff/list',
-    GET_USER_LIST:   '/user/list',
+    GET_STAFF_LIST: '/staff/list',
+    GET_USER_LIST: '/user/list',
     GET_USER_PROFILE: '/user/profile',
     UPDATE_USER_PROFILE: '/update/profile',
     EDIT_USER: '/edit/user/:_id',
     DELETE_USER: '/delete/user/:_id',
+    USER_ADD: '/user/add',
 
     //STAFF ROUTES
     ADD_DOCTOR: '/add/doctor',

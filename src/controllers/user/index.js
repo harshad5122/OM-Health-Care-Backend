@@ -79,7 +79,18 @@ const deleteUser = async (req, res) => {
         res.send(err);
     }
 }
-
+const createUser = async (req, res) => {
+    try {
+        userData = req?.body;
+        userData.addedByAdmin = true;
+        const response = await userService.createUser(userData, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} delete user API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`Delete User ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
 module.exports = {
     getAdminList,
     getStaffList,
@@ -88,4 +99,5 @@ module.exports = {
     updateUserProfile,
     editUser,
     deleteUser,
+    createUser
 }

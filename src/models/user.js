@@ -92,6 +92,11 @@ const userSchema = mongoose.Schema({
         type: Boolean,
         default: false
     },
+    staff_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Staff", // <-- link to Staff collection
+        required: false
+    },
     status: {
         type: Number,
         required: true,

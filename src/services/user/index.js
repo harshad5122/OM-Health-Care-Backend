@@ -4,6 +4,56 @@ const UserSchema = require('../../models/user');
 const { responseData, messageConstants } = require('../../constants');
 const { logger } = require('../../utils');
 const { UserTypes } = require('../../constants/enum');
+const { cryptoGraphy } = require('../../middlewares');
+
+// services/userService.js
+
+const createUser = async (userData, res) => {
+    return new Promise(async () => {
+        try {
+            // Check if user already exists by email or phone
+            const existingUser = await UserSchema.findOne({
+                $or: [{ email: userData.email }, { phone: userData.phone }],
+            });
+
+            if (existingUser) {
+                logger.error(`user already exists`);
+                return responseData.fail(res, `user already exists `, 403);
+            }
+
+            // If password not provided → assign default and mark flag
+            if (!userData.password) {
+                userData.password = process.env.DEFAULT_USER_PASSWORD || "Temp@123";
+                userData.addedByAdmin = userData?.addedByAdmin
+            } else {
+                userData.addedByAdmin = false
+            }
+            if (!userData?.role) {
+                userData.role = UserTypes.USER
+            }
+            console.log(userData.email, " ", userData.password, "email password")
+            // Hash password
+            userData.password = await cryptoGraphy.hashPassword(userData.password);
+
+
+
+            const user = new UserSchema(userData);
+            const savedUser = await user.save();
+
+            const userObj = savedUser.toObject();
+            delete userObj.password;
+
+            return responseData.success(res, userObj, messageConstants.USER_CREATED);
+        } catch (error) {
+
+            logger.error("Create user " + messageConstants.INTERNAL_SERVER_ERROR, error);
+            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 400);
+        }
+    });
+};
+
+
+
 
 const getAdminList = async (req, user, res) => {
     return new Promise(async () => {
@@ -12,8 +62,8 @@ const getAdminList = async (req, user, res) => {
                 role: UserTypes.ADMIN,
                 is_deleted: false
             })
-            .select('-password -token')   // exclude sensitive fields
-            .sort({ created_at: -1 });
+                .select('-password -token')   // exclude sensitive fields
+                .sort({ created_at: -1 });
 
             if (result.length > 0) {
                 return responseData.success(
@@ -42,8 +92,8 @@ const getStaffList = async (req, user, res) => {
                 role: UserTypes.STAFF,
                 is_deleted: false
             })
-            .select('-password -token')
-            .sort({ created_at: -1 });
+                .select('-password -token')
+                .sort({ created_at: -1 });
 
             if (result.length > 0) {
                 return responseData.success(
@@ -72,8 +122,8 @@ const getUserList = async (req, user, res) => {
                 role: UserTypes.USER,
                 is_deleted: false
             })
-            .select('-password -token')
-            .sort({ created_at: -1 });
+                .select('-password -token')
+                .sort({ created_at: -1 });
 
             if (result.length > 0) {
                 return responseData.success(
@@ -221,6 +271,7 @@ const deleteUser = async (req, userDetails, res) => {
     });
 };
 
+
 module.exports = {
     getAdminList,
     getStaffList,
@@ -228,6 +279,7 @@ module.exports = {
     getUserProfile,
     updateUserProfile,
     editUser,
-    deleteUser
+    deleteUser,
+    createUser,
 
 };

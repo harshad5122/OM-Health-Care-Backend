@@ -30,7 +30,9 @@ const messageConstants = {
     LOGGED_OUT_SUCCESSFULLY: 'Logout Successfully',
     DELETE_FAILED: 'User Deleted failed',
     DELETE_SUCCESS: 'User Deleted Successfull',
-    
+    CHANGE_PASSWORD: "Password changed successfully",
+    CHANGE_PASSWORD_FAILED: "Failed to change password"
+
 }
 
 module.exports = messageConstants;

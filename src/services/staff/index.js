@@ -2,6 +2,8 @@ const StaffSchema = require('../../models/staff');
 const { responseData, messageConstants } = require('../../constants');
 const { logger } = require('../../utils');
 const { UserTypes } = require('../../constants/enum');
+const { createUser } = require('../../services/user')
+
 
 
 const addDoctor = async (req, userDetails, res) => {
@@ -9,20 +11,52 @@ const addDoctor = async (req, userDetails, res) => {
     try {
       const bodyData = req.body;
 
-      // Ensure staff role is assigned
       bodyData.role = UserTypes.STAFF;
+
+      // 🔍 Check if staff already exists by email or phone
+      const existingStaff = await StaffSchema.findOne({
+        $or: [{ email: bodyData.email }, { phone: bodyData.phone }],
+      });
+
+      if (existingStaff) {
+        logger.error(
+          `Staff with email ${bodyData.email} or phone ${bodyData.phone} already exists`
+        );
+        return responseData.fail(
+          res,
+          "Staff already exists with this email or phone",
+          409
+        );
+      }
 
       const staff = new StaffSchema(bodyData);
       const savedStaff = await staff.save();
 
-      logger.info("Doctor added successfully", savedStaff._id);
+      const userPayload = {
+        firstname: bodyData.firstname,
+        lastname: bodyData.lastname,
+        email: bodyData.email,
+        phone: bodyData.phone,
+        countryCode: bodyData.countryCode,
+        role: UserTypes.STAFF,
+        staffId: savedStaff._id, // link staff to user
+        addedByAdmin: true, // mark that admin created it
+      };
+
+      const user = await createUser(userPayload);
+
+      logger.info(
+        "Doctor added successfully",
+        { staffId: savedStaff._id, userId: user._id }
+      );
 
       return responseData.success(
         res,
-        savedStaff,
+        { staff: savedStaff, user }, // return both if you want
         messageConstants.DATA_SAVED_SUCCESSFULLY
       );
     } catch (error) {
+      console.error(error);
       logger.error("Add Doctor " + messageConstants.INTERNAL_SERVER_ERROR, error);
       return responseData.fail(
         res,
@@ -41,7 +75,7 @@ const getDoctor = async (req, userDetails, res) => {
         role: UserTypes.STAFF,
         is_deleted: false,
       })
-        .select("-__v -token") 
+        .select("-__v -token")
         .sort({ created_at: -1 });
 
       if (doctors.length > 0) {

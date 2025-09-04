@@ -37,9 +37,7 @@ const logout = async (req, res) => {
 }
 const changePassword = async (req, res) => {
     try {
-        console.log("jjj")
         const response = await authService.changePassword(req.body, req?.userDetails, res);
-        console.log(response, ">>jjj")
         logger.info(`${messageConstants.RESPONSE_FROM} change password`, JSON.stringify(response));
         res.send(response);
     } catch (err) {

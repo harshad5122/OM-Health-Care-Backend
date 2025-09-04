@@ -41,9 +41,15 @@ const addDoctor = async (req, userDetails, res) => {
         role: UserTypes.STAFF,
         staffId: savedStaff._id, // link staff to user
         addedByAdmin: true, // mark that admin created it
+        dob: bodyData.dob,
+        gender: bodyData.gender,
+        address: bodyData.address,
+        city: bodyData.city,
+        state: bodyData.state,
+        country: bodyData.country
       };
 
-      const user = await createUser(userPayload);
+      const user = await createUser(userPayload, res);
 
       logger.info(
         "Doctor added successfully",

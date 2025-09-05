@@ -1,8 +1,9 @@
 const StaffSchema = require('../../models/staff');
+const UserSchema = require('../../models/user');
 const { responseData, messageConstants } = require('../../constants');
 const { logger } = require('../../utils');
 const { UserTypes } = require('../../constants/enum');
-const { createUser } = require('../../services/user');
+const { createUser, editUser } = require('../../services/user');
 const { default: mongoose } = require('mongoose');
 
 
@@ -40,7 +41,7 @@ const addDoctor = async (req, userDetails, res) => {
         phone: bodyData.phone,
         countryCode: bodyData.countryCode,
         role: UserTypes.STAFF,
-        staffId: savedStaff._id, // link staff to user
+        staff_id: savedStaff._id, // link staff to user
         addedByAdmin: true, // mark that admin created it
         dob: bodyData.dob,
         gender: bodyData.gender,
@@ -79,85 +80,106 @@ const addDoctor = async (req, userDetails, res) => {
 const getDoctor = async (req, userDetails, res) => {
   return new Promise(async () => {
     try {
-      const doctors = await StaffSchema.aggregate([
+      const skip = parseInt(req.query.skip) || 0;
+      const limit = parseInt(req.query.limit) || 10;
+      const result = await StaffSchema.aggregate([
         {
           $match: {
-            role: UserTypes.STAFF,
             is_deleted: false,
           },
         },
         {
-          $project: {
-            // top-level fields
-            firstname: 1,
-            lastname: 1,
-            email: 1,
-            countryCode: 1,
-            phone: 1,
-            dob: 1,
-            gender: 1,
-            address: 1,
-            city: 1,
-            state: 1,
-            country: 1,
-            pincode: 1,
-            qualification: 1,
-            specialization: 1,
-            occupation: 1,
-            professionalStatus: 1,
-            created_at: 1,
-            updated_at: 1,
-            is_deleted: 1,
-            status: 1,
+          $facet: {
+            data: [
+              {
+                $sort: { created_at: -1 },
+              },
+              { $skip: skip },
+              { $limit: limit },
+              {
+                $project: {
+                  // top-level fields
+                  firstname: 1,
+                  lastname: 1,
+                  email: 1,
+                  countryCode: 1,
+                  phone: 1,
+                  dob: 1,
+                  gender: 1,
+                  address: 1,
+                  city: 1,
+                  state: 1,
+                  country: 1,
+                  pincode: 1,
+                  qualification: 1,
+                  specialization: 1,
+                  occupation: 1,
+                  professionalStatus: 1,
+                  created_at: 1,
+                  updated_at: 1,
+                  is_deleted: 1,
+                  status: 1,
 
-            // flatten workExperience
-            workExperience_totalYears: "$workExperience.totalYears",
-            workExperience_lastHospital: "$workExperience.lastHospital",
-            workExperience_position: "$workExperience.position",
-            workExperience_workAddress_hospitalName: "$workExperience.workAddress.hospitalName",
-            workExperience_workAddress_line1: "$workExperience.workAddress.line1",
-            workExperience_workAddress_city: "$workExperience.workAddress.city",
-            workExperience_workAddress_state: "$workExperience.workAddress.state",
-            workExperience_workAddress_country: "$workExperience.workAddress.country",
-            workExperience_workAddress_pincode: "$workExperience.workAddress.pincode",
+                  // flatten workExperience
+                  workExperience_totalYears: "$workExperience.totalYears",
+                  workExperience_lastHospital: "$workExperience.lastHospital",
+                  workExperience_position: "$workExperience.position",
+                  workExperience_workAddress_hospitalName: "$workExperience.workAddress.hospitalName",
+                  workExperience_workAddress_line1: "$workExperience.workAddress.line1",
+                  workExperience_workAddress_city: "$workExperience.workAddress.city",
+                  workExperience_workAddress_state: "$workExperience.workAddress.state",
+                  workExperience_workAddress_country: "$workExperience.workAddress.country",
+                  workExperience_workAddress_pincode: "$workExperience.workAddress.pincode",
 
-            // flatten familyDetails
-            familyDetails_father_name: "$familyDetails.father.name",
-            familyDetails_father_contact: "$familyDetails.father.contact",
-            familyDetails_father_occupation: "$familyDetails.father.occupation",
+                  // flatten familyDetails
+                  familyDetails_father_name: "$familyDetails.father.name",
+                  familyDetails_father_contact: "$familyDetails.father.contact",
+                  familyDetails_father_occupation: "$familyDetails.father.occupation",
 
-            familyDetails_mother_name: "$familyDetails.mother.name",
-            familyDetails_mother_contact: "$familyDetails.mother.contact",
-            familyDetails_mother_occupation: "$familyDetails.mother.occupation",
+                  familyDetails_mother_name: "$familyDetails.mother.name",
+                  familyDetails_mother_contact: "$familyDetails.mother.contact",
+                  familyDetails_mother_occupation: "$familyDetails.mother.occupation",
 
-            familyDetails_permanentAddress_line1: "$familyDetails.permanentAddress.line1",
-            familyDetails_permanentAddress_line2: "$familyDetails.permanentAddress.line2",
-            familyDetails_permanentAddress_city: "$familyDetails.permanentAddress.city",
-            familyDetails_permanentAddress_state: "$familyDetails.permanentAddress.state",
-            familyDetails_permanentAddress_country: "$familyDetails.permanentAddress.country",
-            familyDetails_permanentAddress_pincode: "$familyDetails.permanentAddress.pincode",
+                  familyDetails_permanentAddress_line1: "$familyDetails.permanentAddress.line1",
+                  familyDetails_permanentAddress_line2: "$familyDetails.permanentAddress.line2",
+                  familyDetails_permanentAddress_city: "$familyDetails.permanentAddress.city",
+                  familyDetails_permanentAddress_state: "$familyDetails.permanentAddress.state",
+                  familyDetails_permanentAddress_country: "$familyDetails.permanentAddress.country",
+                  familyDetails_permanentAddress_pincode: "$familyDetails.permanentAddress.pincode",
 
-            familyDetails_currentAddress_line1: "$familyDetails.currentAddress.line1",
-            familyDetails_currentAddress_line2: "$familyDetails.currentAddress.line2",
-            familyDetails_currentAddress_city: "$familyDetails.currentAddress.city",
-            familyDetails_currentAddress_state: "$familyDetails.currentAddress.state",
-            familyDetails_currentAddress_country: "$familyDetails.currentAddress.country",
-            familyDetails_currentAddress_pincode: "$familyDetails.currentAddress.pincode",
+                  familyDetails_currentAddress_line1: "$familyDetails.currentAddress.line1",
+                  familyDetails_currentAddress_line2: "$familyDetails.currentAddress.line2",
+                  familyDetails_currentAddress_city: "$familyDetails.currentAddress.city",
+                  familyDetails_currentAddress_state: "$familyDetails.currentAddress.state",
+                  familyDetails_currentAddress_country: "$familyDetails.currentAddress.country",
+                  familyDetails_currentAddress_pincode: "$familyDetails.currentAddress.pincode",
 
-            familyDetails_sameAsPermanent: "$familyDetails.sameAsPermanent",
+                  familyDetails_sameAsPermanent: "$familyDetails.sameAsPermanent",
 
-            familyDetails_emergencyContact_name: "$familyDetails.emergencyContact.name",
-            familyDetails_emergencyContact_relation: "$familyDetails.emergencyContact.relation",
-            familyDetails_emergencyContact_contact: "$familyDetails.emergencyContact.contact",
-          },
-        },
-        { $sort: { created_at: -1 } },
-      ]);
+                  familyDetails_emergencyContact_name: "$familyDetails.emergencyContact.name",
+                  familyDetails_emergencyContact_relation: "$familyDetails.emergencyContact.relation",
+                  familyDetails_emergencyContact_contact: "$familyDetails.emergencyContact.contact",
+                },
+              },
 
+            ],
+            totalCount: [
+              { $count: "count" }
+            ],
+          }
+        }
+      ],
+
+      );
+      const doctors = result[0].data;
+      const totalCount = result[0].totalCount[0]?.count || 0;
       if (doctors.length > 0) {
         return responseData.success(
           res,
-          doctors,
+          {
+            rows: doctors,
+            total_count: totalCount
+          },
           `Doctor ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
         );
       } else {
@@ -168,6 +190,7 @@ const getDoctor = async (req, userDetails, res) => {
         );
       }
     } catch (error) {
+      console.log(error, ">>> eroor >>>")
       logger.error("Get Doctor " + messageConstants.INTERNAL_SERVER_ERROR, error);
       return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
     }
@@ -210,11 +233,11 @@ const editDoctor = async (req, userDetails, res) => {
   return new Promise(async () => {
     try {
       const doctorId = req.params._id;
-      const updateData = req.body;
+      const bodyData = req.body;
 
       const updatedDoctor = await StaffSchema.findByIdAndUpdate(
         doctorId,
-        { ...updateData, updated_at: Date.now() },
+        { ...bodyData, updated_at: Date.now() },
         { new: true }
       );
 
@@ -225,8 +248,23 @@ const editDoctor = async (req, userDetails, res) => {
           404
         );
       }
-
+      const userPayload = {
+        firstname: bodyData.firstname,
+        lastname: bodyData.lastname,
+        email: bodyData.email,
+        phone: bodyData.phone,
+        countryCode: bodyData.countryCode,
+        role: UserTypes.STAFF,
+        dob: bodyData.dob,
+        gender: bodyData.gender,
+        address: bodyData.address,
+        city: bodyData.city,
+        state: bodyData.state,
+        country: bodyData.country,
+      };
       logger.info(`Doctor updated successfully: ${doctorId}`);
+      const user = await UserSchema?.findOne({ staff_id: doctorId });
+      await editUser(userPayload, user?._id, res)
       return responseData.success(
         res,
         updatedDoctor,

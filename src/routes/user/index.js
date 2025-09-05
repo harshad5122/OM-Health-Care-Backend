@@ -11,4 +11,5 @@ module.exports = (app) => {
     app.put(urlConstants.EDIT_USER, jsonWebToken.validateToken, userController.editUser);
     app.delete(urlConstants.DELETE_USER, jsonWebToken.validateToken, userController.deleteUser);
     app.post(urlConstants.USER_ADD, jsonWebToken.validateToken, userController?.createUser);
+    app.get(urlConstants.GET_USER_BY_ID, jsonWebToken.validateToken, userController.getUserProfile)
 }

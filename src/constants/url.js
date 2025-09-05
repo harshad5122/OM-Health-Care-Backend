@@ -34,6 +34,7 @@ const urlConstants = {
     EDIT_USER: '/edit/user/:_id',
     DELETE_USER: '/delete/user/:_id',
     USER_ADD: '/user/add',
+    GET_USER_BY_ID: '/user/:_id',
 
     //STAFF ROUTES
     ADD_DOCTOR: '/add/doctor',

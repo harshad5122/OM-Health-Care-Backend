@@ -50,9 +50,6 @@ const createUser = async (userData, res) => {
     });
 };
 
-
-
-
 const getAdminList = async (req, user, res) => {
     return new Promise(async () => {
         try {
@@ -116,17 +113,27 @@ const getStaffList = async (req, user, res) => {
 const getUserList = async (req, user, res) => {
     return new Promise(async () => {
         try {
-            const result = await UserSchema.find({
+            const skip = req.query.skip ? parseInt(req.query.skip) : null;
+            const limit = req.query.limit ? parseInt(req.query.limit) : null;
+
+            let query = UserSchema.find({
                 role: UserTypes.USER,
                 is_deleted: false
-            })
-                .select('-password -token')
-                .sort({ created_at: -1 });
+            }).select("-password -token").sort({ created_at: -1 });
+            if (skip !== null && limit !== null) {
+                query = query.skip(skip).limit(limit);
+            }
+            const result = await query;
+            const total_count = await UserSchema.countDocuments({
+                role: UserTypes.USER,
+                is_deleted: false
+            });
+
 
             if (result.length > 0) {
                 return responseData.success(
                     res,
-                    result,
+                    (skip !== null && limit !== null) ? { rows: result, total_count } : result,
                     `User ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
                 );
             } else {
@@ -205,18 +212,18 @@ const updateUserProfile = async (req, userDetails, res) => {
     });
 };
 
-const editUser = async (req, userDetails, res) => {
+const editUser = async (updateData, userId, res) => {
     return new Promise(async () => {
         try {
             // const userId = userDetails?._id;
-            const userId = req.params._id;
+            // const userId = req.params._id;
 
             if (!userId) {
                 logger.error("User ID not found in token");
                 return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
             }
 
-            const updateData = req.body;
+            // const updateData = req.body;
             updateData.updated_at = new Date(); // keep updated timestamp
 
             const updatedUser = await UserSchema.findByIdAndUpdate(
@@ -278,5 +285,5 @@ module.exports = {
     updateUserProfile,
     editUser,
     deleteUser,
-    createUser
+    createUser,
 };

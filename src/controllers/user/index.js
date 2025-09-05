@@ -38,6 +38,8 @@ const getUserList = async (req, res) => {
 
 const getUserProfile = async (req, res) => {
     try {
+        const userId = req?.params?._id
+        req.userDetails._id = userId ? userId : req?.userDetails?._id;
         const response = await userService.getUserProfile(req, req?.userDetails, res);
         logger.info(`${messageConstants.RESPONSE_FROM} get user profile API`, JSON.stringify(response));
         res.send(response);
@@ -60,7 +62,8 @@ const updateUserProfile = async (req, res) => {
 
 const editUser = async (req, res) => {
     try {
-        const response = await userService.editUser(req, req?.userDetails, res);
+        const userId = req.params._id;
+        const response = await userService.editUser(req?.body, userId, res);
         logger.info(`${messageConstants.RESPONSE_FROM} edit user API`, JSON.stringify(response));
         res.send(response);
     } catch (err) {

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>Welcome to Om Health Care</title>
+  <style>
+    table, td, div, h1, p {
+      font-family: Arial, sans-serif;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #ffffff;
+      background: #28a745;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+    .btn:hover {
+      background: #218838;
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f4;">
+  <table role="presentation" style="width:100%;border-collapse:collapse;border:0;background:#f4f4f4;">
+    <tr>
+      <td align="center" style="padding:30px 0;">
+        <table role="presentation" style="width:600px;border-collapse:collapse;border:1px solid #cccccc;background:#ffffff;text-align:left;border-radius:8px;overflow:hidden;">
+          
+          <!-- Header -->
+          <tr>
+            <td align="center" style="padding:30px;background:#0069d9;color:#ffffff;">
+              <h1 style="margin:0;font-size:28px;font-weight:bold;">Welcome to Om Health Care</h1>
+              <p style="margin:5px 0 0;font-size:16px;">We’re excited to have you onboard</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 30px 42px 30px;color:#153643;">
+              <h2 style="font-size:22px;margin:0 0 20px 0;">Hello <%= content.firstname %> <%= content.lastname %>,</h2>
+              
+              <p style="margin:0 0 16px;font-size:16px;line-height:24px;">
+                You have been successfully registered as a <strong>Doctor</strong> in our system at <b>Om Health Care</b>. Below are your login credentials:
+              </p>
+              
+              <table style="width:100%;margin:20px 0;border-collapse:collapse;">
+                <tr>
+                  <td style="padding:8px 0;font-size:16px;"><strong>Email:</strong></td>
+                  <td style="padding:8px 0;font-size:16px;"><%= content.email %></td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;font-size:16px;"><strong>Password:</strong></td>
+                  <td style="padding:8px 0;font-size:16px;"><%= content.password %></td>
+                </tr>
+              </table>
+
+              <p style="margin:30px 0 0;font-size:14px;line-height:20px;color:#555;">
+                For security reasons, we recommend changing your password after your first login.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px;background:#0069d9;text-align:center;color:#ffffff;font-size:14px;">
+              © <%= new Date().getFullYear() %> Om Health Care. All rights reserved.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

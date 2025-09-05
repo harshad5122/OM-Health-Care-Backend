@@ -4,7 +4,7 @@ const { jsonWebToken, cryptoGraphy } = require('../../middlewares');
 const { logger, mail } = require('../../utils');
 const otpGenerator = require('otp-generator');
 
-const signUp = async (body, res) => {
+const signUp = async (body, res) => { 
   return new Promise(async () => {
     if (!body || !body.password) {
       logger.error('Missing body or password');
@@ -60,62 +60,34 @@ const signIn = async (body, res) => {
         return responseData.success(res, user, messageConstants.LOGGEDIN_SUCCESSFULLY);
       }
 
-      // ----------------- LOGIN WITH PHONE (OTP) -----------------
       if (loginType === 'phone') {
-
-        const { countryCode, phone, otp } = body;
+        const { countryCode, phone } = body;
 
         if (!countryCode || !phone) {
           return responseData.fail(res, messageConstants.PHONE_REQUIRED, 400);
         }
 
-
-        const fullPhone = `${String(countryCode).trim()}${String(phone).trim()}`;
-
-
-        if (!otp) {
-
-          const generated = genOtp();
-
-
-          OTP_STORE.set(fullPhone, { otp: generated, expires: Date.now() + 5 * 60 * 1000 });
-          logger.info(`OTP for ${fullPhone} is: ${generated} (valid 5 min)`);
-
-          return responseData.success(
-            res,
-            { phone: fullPhone },
-            messageConstants.OTP_SENT || 'OTP sent successfully'
-          );
-        }
-
-        // STEP 2: Verify OTP
-        const entry = OTP_STORE.get(fullPhone);
-        if (!entry) {
-          return responseData.fail(res, messageConstants.INVALID_OTP || 'Invalid or expired OTP', 401);
-        }
-        const { otp: storedOtp, expires } = entry;
-
-        if (Date.now() > expires) {
-          OTP_STORE.delete(fullPhone);
-          return responseData.fail(res, messageConstants.INVALID_OTP || 'Invalid or expired OTP', 401);
-        }
-
-        if (String(otp).trim() !== String(storedOtp).trim()) {
-          return responseData.fail(res, messageConstants.INVALID_OTP || 'Invalid or expired OTP', 401);
-        }
-
-        OTP_STORE.delete(fullPhone);
-        const phoneForDb = last10Digits(fullPhone);
-
+        const phoneForDb = String(phone).trim();
         let user = await UserSchema.findOne({ phone: phoneForDb, is_deleted: false });
+
         if (!user) {
-          user = new UserSchema({ phone: phoneForDb });
-          await user.save();
+          user = new UserSchema({ phone: phoneForDb, countryCode });
         }
 
-        await createJsonWebTokenForUser(user);
-        logger.info(`User ${fullPhone} logged in with phone`);
-        return responseData.success(res, user, messageConstants.LOGGEDIN_SUCCESSFULLY);
+        // generate OTP
+        const generatedOtp = genOtp();
+
+        user.otp = generatedOtp;
+        user.otpExpiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes expiry
+        await user.save();
+
+        // TODO: integrate SMS/WhatsApp/email service to actually send OTP
+        logger.info(`OTP for ${countryCode}${phoneForDb} is: ${generatedOtp} (valid 5 min)`);
+
+        return responseData.success(
+          res,
+          messageConstants.OTP_SENT || 'OTP sent successfully'
+        );
       }
 
       return responseData.fail(res, messageConstants.INVALID_LOGIN_TYPE || 'Invalid login type', 400);
@@ -126,6 +98,47 @@ const signIn = async (body, res) => {
   });
 };
 
+const verifyOtp = async (body, res) => {
+  return new Promise(async () => {
+    try {
+      const { countryCode, phone, otp } = body;
+
+      if (!countryCode || !phone || !otp) {
+        return responseData.fail(res, messageConstants.PHONE_OTP_REQUIRED || 'Phone & OTP required', 400);
+      }
+
+      const phoneForDb = String(phone).trim();
+      const user = await UserSchema.findOne({ phone: phoneForDb, countryCode, is_deleted: false });
+
+      if (!user || !user.otp || !user.otpExpiresAt) {
+        return responseData.fail(res, messageConstants.INVALID_OTP || 'Invalid or expired OTP', 401);
+      }
+
+      if (Date.now() > user.otpExpiresAt) {
+        user.otp = null;
+        user.otpExpiresAt = null;
+        await user.save();
+        return responseData.fail(res, messageConstants.INVALID_OTP || 'Invalid or expired OTP', 401);
+      }
+
+      if (String(otp).trim() !== String(user.otp).trim()) {
+        return responseData.fail(res, messageConstants.INVALID_OTP || 'Invalid or expired OTP', 401);
+      }
+
+      // OTP valid → clear it
+      user.otp = null;
+      user.otpExpiresAt = null;
+      await createJsonWebTokenForUser(user);
+      await user.save();
+
+      logger.info(`User ${countryCode}${phoneForDb} verified OTP and logged in`);
+      return responseData.success(res, user, messageConstants.LOGGEDIN_SUCCESSFULLY);
+    } catch (err) {
+      logger.error(messageConstants.INTERNAL_SERVER_ERROR, err);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+  });
+};
 
 const createJsonWebTokenForUser = async (user) => {
   user['token'] = await jsonWebToken.createToken(user['_id']);
@@ -261,6 +274,7 @@ const resetPassword = async (body, userData, res) => {
 module.exports = {
   signUp,
   signIn,
+  verifyOtp,
   logout,
   changePassword,
   forgotPassword,

@@ -7,7 +7,6 @@ const { createUser, editUser } = require('../../services/user');
 const { default: mongoose } = require('mongoose');
 
 
-
 const addDoctor = async (req, userDetails, res) => {
   return new Promise(async () => {
     try {
@@ -53,12 +52,14 @@ const addDoctor = async (req, userDetails, res) => {
       };
 
       const user = await createUser(userPayload, res);
+      console.log("user", user)
 
       logger.info(
         "Doctor added successfully",
         { staffId: savedStaff._id, userId: user._id }
       );
 
+    
       return responseData.success(
         res,
         { staff: savedStaff, user }, // return both if you want

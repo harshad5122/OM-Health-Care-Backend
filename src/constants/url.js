@@ -3,6 +3,7 @@ const urlConstants = {
     // AUTH ROUTES
     USER_SIGNUP: '/auth/signup',
     USER_SIGNIN: '/auth/signin',
+    VERIFY_OTP: '/auth/verify-otp',
     USER_LOGOUT: '/auth/logout',
     USER_CHANGE: '/auth/change-password',
 

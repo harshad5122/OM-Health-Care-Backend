@@ -1,8 +1,8 @@
 // services/user/index.js
 
 const UserSchema = require('../../models/user');
-const { responseData, messageConstants } = require('../../constants');
-const { logger } = require('../../utils');
+const { responseData, messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../../constants');
+const { logger, mail } = require('../../utils');
 const { UserTypes } = require('../../constants/enum');
 const { cryptoGraphy } = require('../../middlewares');
 
@@ -10,6 +10,7 @@ const { cryptoGraphy } = require('../../middlewares');
 
 const createUser = async (userData, res) => {
     return new Promise(async () => {
+        
         try {
             // Check if user already exists by email or phone
             const existingUser = await UserSchema.findOne({
@@ -22,7 +23,7 @@ const createUser = async (userData, res) => {
 
             // If password not provided → assign default and mark flag
             if (!userData.password) {
-                userData.password = process.env.DEFAULT_USER_PASSWORD || "Temp@123";
+                userData.password = process.env.DEFAULT_USER_PASSWORD || "OmHealth@123";
                 userData.isPasswordChanged = userData?.isPasswordChanged
                 userData.addedByAdmin = userData?.addedByAdmin
             } else {
@@ -39,11 +40,28 @@ const createUser = async (userData, res) => {
             const savedUser = await user.save();
 
             const userObj = savedUser.toObject();
+            // if (isFunctionCall){
+            console.log('userObj', userObj);
+            const mailContent = {
+                firstname: user.firstname,
+                lastname: user.lastname,
+                email: user.email,
+                password: process.env.DEFAULT_USER_PASSWORD,
+            };
+            // return savedUser.toObject();
+            await mail.sendMailToUser(
+                mailTemplateConstants.ADD_DOCTOR_TEMPLATE,
+                user.email,
+                mailSubjectConstants.ADD_DOCTOR_SUBJECT,
+                mailContent
+            );
+
+            // } 
             delete userObj.password;
-
             return responseData.success(res, userObj, messageConstants.USER_CREATED);
-        } catch (error) {
 
+        } catch (error) {
+            console.log(error);
             logger.error("Create user " + messageConstants.INTERNAL_SERVER_ERROR, error);
             return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 400);
         }

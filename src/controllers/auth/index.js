@@ -25,6 +25,17 @@ const signIn = async (req, res) => {
     }
 }
 
+const verifyOtp = async (req, res) => {
+    try {
+        const response = await authService.verifyOtp(req.body, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} signIn API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`signIn ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
 const logout = async (req, res) => {
     try {
         const response = await authService.logout(req.body, res);
@@ -49,6 +60,7 @@ const changePassword = async (req, res) => {
 module.exports = {
     signUp,
     signIn,
+    verifyOtp,
     logout,
     changePassword
 }

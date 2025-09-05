@@ -82,12 +82,38 @@ const getDoctor = async (req, userDetails, res) => {
     try {
       const skip = parseInt(req.query.skip) || 0;
       const limit = parseInt(req.query.limit) || 10;
+      const search = req.query.search || "";
+
+      let match;
+      if (search) {
+        match = {
+          $and: [
+            { is_deleted: false },
+            {
+              $or: [
+                { firstname: { $regex: search, $options: "i" } },
+                { lastname: { $regex: search, $options: "i" } },
+                { email: { $regex: search, $options: "i" } },
+                {
+                  $expr: {
+                    $regexMatch: {
+                      input: { $toString: "$phone" },
+                      regex: search,
+                      options: "i"
+                    }
+                  }
+                },
+                { phone: { $regex: search, $options: "i" } }
+              ]
+            }
+          ]
+        };
+      } else {
+        match = { is_deleted: false };
+      }
+
       const result = await StaffSchema.aggregate([
-        {
-          $match: {
-            is_deleted: false,
-          },
-        },
+        { $match: match },   // ✅ use constructed match
         {
           $facet: {
             data: [
@@ -185,12 +211,16 @@ const getDoctor = async (req, userDetails, res) => {
       } else {
         return responseData.fail(
           res,
+          {
+            rows: [],
+            total_count: 0
+          },
           `Doctor ${messageConstants.LIST_NOT_FOUND}`,
           204
         );
       }
+
     } catch (error) {
-      console.log(error, ">>> eroor >>>")
       logger.error("Get Doctor " + messageConstants.INTERNAL_SERVER_ERROR, error);
       return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
     }

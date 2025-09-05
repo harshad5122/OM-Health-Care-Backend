@@ -115,25 +115,46 @@ const getUserList = async (req, user, res) => {
         try {
             const skip = req.query.skip ? parseInt(req.query.skip) : null;
             const limit = req.query.limit ? parseInt(req.query.limit) : null;
+            let match = { role: UserTypes.USER, is_deleted: false };
+            const search = req.query.search || "";
 
-            let query = UserSchema.find({
-                role: UserTypes.USER,
-                is_deleted: false
-            }).select("-password -token").sort({ created_at: -1 });
+            if (search) {
+                match = {
+                    $and: [
+                        { role: UserTypes.USER, is_deleted: false },
+                        {
+                            $or: [
+                                { firstname: { $regex: search, $options: "i" } },
+                                { lastname: { $regex: search, $options: "i" } },
+                                { email: { $regex: search, $options: "i" } },
+                                {
+                                    $expr: {
+                                        $regexMatch: {
+                                            input: { $toString: "$phone" }, // ✅ safe for number/string
+                                            regex: search,
+                                            options: "i",
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                };
+            }
+
+            let query = UserSchema.find(match).select("-password -token").sort({ created_at: -1 });
             if (skip !== null && limit !== null) {
                 query = query.skip(skip).limit(limit);
             }
             const result = await query;
-            const total_count = await UserSchema.countDocuments({
-                role: UserTypes.USER,
-                is_deleted: false
-            });
+            const total_count = await UserSchema.countDocuments(match);
 
-
+            console.log((skip && limit) ? { rows: result, total_count } : result, ">>> the result ")
             if (result.length > 0) {
+
                 return responseData.success(
                     res,
-                    (skip !== null && limit !== null) ? { rows: result, total_count } : result,
+                    (skip && limit) ? { rows: result, total_count } : result,
                     `User ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
                 );
             } else {
@@ -144,6 +165,7 @@ const getUserList = async (req, user, res) => {
                 );
             }
         } catch (error) {
+
             logger.error("Get User List " + messageConstants.INTERNAL_SERVER_ERROR, error);
             return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
         }

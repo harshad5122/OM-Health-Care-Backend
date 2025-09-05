@@ -50,9 +50,7 @@ const signIn = async (body, res) => {
         if (!user) {
           return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
         }
-        console.log(body.password, user.password, user, ">>lolo")
         const isMatch = await cryptoGraphy.comparePassword(body.password, user.password);
-        console.log(isMatch)
         if (!isMatch) {
           return responseData.fail(res, messageConstants.EMAIL_PASS_INCORRECT, 401);
         }
@@ -207,7 +205,7 @@ const changePassword = async (body, user, res) => {
         { _id: user._id },
         {
           password: newPass,
-          addedByAdmin: false   // ✅ update the flag
+          isPasswordChanged: false   // ✅ update the flag
         },
         { new: true } // ✅ returns updated doc instead of old one)
       );

@@ -15,7 +15,6 @@ const createUser = async (userData, res) => {
             const existingUser = await UserSchema.findOne({
                 $or: [{ email: userData.email }, { phone: userData.phone }],
             });
-
             if (existingUser) {
                 logger.error(`user already exists`);
                 return responseData.fail(res, `user already exists `, 403);
@@ -24,8 +23,10 @@ const createUser = async (userData, res) => {
             // If password not provided → assign default and mark flag
             if (!userData.password) {
                 userData.password = process.env.DEFAULT_USER_PASSWORD || "Temp@123";
+                userData.isPasswordChanged = userData?.isPasswordChanged
                 userData.addedByAdmin = userData?.addedByAdmin
             } else {
+                userData.isPasswordChanged = false
                 userData.addedByAdmin = false
             }
             if (!userData?.role) {
@@ -34,9 +35,6 @@ const createUser = async (userData, res) => {
             console.log(userData.email, " ", userData.password, "email password")
             // Hash password
             userData.password = await cryptoGraphy.hashPassword(userData.password);
-
-
-
             const user = new UserSchema(userData);
             const savedUser = await user.save();
 
@@ -280,6 +278,5 @@ module.exports = {
     updateUserProfile,
     editUser,
     deleteUser,
-    createUser,
-
+    createUser
 };

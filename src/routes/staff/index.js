@@ -7,4 +7,5 @@ module.exports = (app) => {
     app.get(urlConstants.GET_DOCTOR, jsonWebToken.validateToken, staffController.getDoctor);
     app.put(urlConstants.EDIT_DOCTOR, jsonWebToken.validateToken, staffController.editDoctor);
     app.delete(urlConstants.DELETE_DOCTOR, jsonWebToken.validateToken, staffController.deleteDoctor);
+    app.get(urlConstants.GET_DOCTOR_BY_ID, jsonWebToken.validateToken, staffController.getDoctorById);
 };

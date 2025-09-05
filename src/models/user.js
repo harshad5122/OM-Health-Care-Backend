@@ -78,6 +78,10 @@ const userSchema = mongoose.Schema({
         type: Boolean,
         default: false
     },
+    isPasswordChanged: {
+        type: Boolean,
+        default: false
+    },
     created_at: {
         type: Date,
         required: true,

@@ -46,10 +46,22 @@ const deleteDoctor = async (req, res) => {
     }
 }
 
+const getDoctorById = async (req, res) => {
+    try {
+        const response = await staffService.getDoctorById(req, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} get doctor API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`get doctor API ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
+
 module.exports = {
     addDoctor,
     getDoctor,
     editDoctor,
-    deleteDoctor
-
+    deleteDoctor,
+    getDoctorById
 }

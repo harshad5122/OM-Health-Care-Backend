@@ -40,6 +40,8 @@ const urlConstants = {
     GET_DOCTOR: '/get/doctor',
     EDIT_DOCTOR: '/edit/doctor/:_id',
     DELETE_DOCTOR: '/delete/doctor/:_id',
+
+    GET_DOCTOR_BY_ID: '/get/doctor/:_id'
 }
 
 module.exports = urlConstants;

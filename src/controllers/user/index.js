@@ -82,6 +82,7 @@ const deleteUser = async (req, res) => {
 const createUser = async (req, res) => {
     try {
         userData = req?.body;
+        userData.isPasswordChanged = true;
         userData.addedByAdmin = true;
         const response = await userService.createUser(userData, res);
         logger.info(`${messageConstants.RESPONSE_FROM} delete user API`, JSON.stringify(response));

@@ -2,9 +2,10 @@ const StaffSchema = require('../../models/staff');
 const UserSchema = require('../../models/user');
 const { responseData, messageConstants } = require('../../constants');
 const { logger } = require('../../utils');
-const { UserTypes } = require('../../constants/enum');
+const { UserTypes, defaultWeeklySchedule } = require('../../constants/enum');
 const { createUser, editUser } = require('../../services/user');
-const { default: mongoose } = require('mongoose');
+const WeeklyScheduleSchema = require('../../models/weekly_schedule_pattern');
+
 
 
 const addDoctor = async (req, userDetails, res) => {
@@ -51,15 +52,20 @@ const addDoctor = async (req, userDetails, res) => {
         isPasswordChanged: true
       };
 
+
+
+      const schedule = await WeeklyScheduleSchema.create({
+        staff_id: savedStaff._id,
+        weekly_schedule: defaultWeeklySchedule
+      });
       const user = await createUser(userPayload, res);
       console.log("user", user)
-
       logger.info(
         "Doctor added successfully",
         { staffId: savedStaff._id, userId: user._id }
       );
 
-    
+
       return responseData.success(
         res,
         { staff: savedStaff, user }, // return both if you want
@@ -83,6 +89,8 @@ const getDoctor = async (req, userDetails, res) => {
     try {
       const skip = parseInt(req.query.skip) || 0;
       const limit = parseInt(req.query.limit) || 10;
+      const from_date = req.query.from_date ? new Date(req.query.from_date) : null;
+      const to_date = req.query.to_date ? new Date(req.query.to_date) : null;
       const search = req.query.search || "";
 
       let match;
@@ -113,6 +121,18 @@ const getDoctor = async (req, userDetails, res) => {
         match = { is_deleted: false };
       }
 
+      if (from_date || to_date) {
+        const dateFilter = {};
+        if (from_date) dateFilter.$gte = from_date;
+        if (to_date) dateFilter.$lte = to_date;
+
+        // Apply date filter
+        if (match.$and) {
+          match.$and.push({ created_at: dateFilter });
+        } else {
+          match.created_at = dateFilter;
+        }
+      }
       const result = await StaffSchema.aggregate([
         { $match: match },   // ✅ use constructed match
         {
@@ -210,14 +230,13 @@ const getDoctor = async (req, userDetails, res) => {
           `Doctor ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
         );
       } else {
-        return responseData.fail(
+        return responseData.success(
           res,
           {
             rows: [],
             total_count: 0
           },
-          `Doctor ${messageConstants.LIST_NOT_FOUND}`,
-          204
+          `Doctor ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
         );
       }
 

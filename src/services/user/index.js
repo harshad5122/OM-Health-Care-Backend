@@ -133,7 +133,10 @@ const getUserList = async (req, user, res) => {
         try {
             const skip = req.query.skip && !isNaN(req.query.skip) ? parseInt(req.query.skip) : null;
             const limit = req.query.limit && !isNaN(req.query.limit) ? parseInt(req.query.limit) : null;
+            const from_date = req.query.from_date ? new Date(req.query.from_date) : null;
+            const to_date = req.query.to_date ? new Date(req.query.to_date) : null;
             let match = { role: UserTypes.USER, is_deleted: false };
+
             const search = req.query.search || "";
 
             if (search) {
@@ -159,7 +162,18 @@ const getUserList = async (req, user, res) => {
                     ],
                 };
             }
+            if (from_date || to_date) {
+                const dateFilter = {};
+                if (from_date) dateFilter.$gte = from_date;
+                if (to_date) dateFilter.$lte = to_date;
 
+                // Apply date filter
+                if (match.$and) {
+                    match.$and.push({ created_at: dateFilter });
+                } else {
+                    match.created_at = dateFilter;
+                }
+            }
             let query = UserSchema.find(match).select("-password -token").sort({ created_at: -1 });
             if (skip !== null && limit !== null) {
                 query = query.skip(skip).limit(limit);

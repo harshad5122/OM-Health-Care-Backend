@@ -10,7 +10,7 @@ const { cryptoGraphy } = require('../../middlewares');
 
 const createUser = async (userData, res) => {
     return new Promise(async () => {
-        
+
         try {
             // Check if user already exists by email or phone
             const existingUser = await UserSchema.findOne({
@@ -131,8 +131,8 @@ const getStaffList = async (req, user, res) => {
 const getUserList = async (req, user, res) => {
     return new Promise(async () => {
         try {
-            const skip = req.query.skip ? parseInt(req.query.skip) : null;
-            const limit = req.query.limit ? parseInt(req.query.limit) : null;
+            const skip = req.query.skip && !isNaN(req.query.skip) ? parseInt(req.query.skip) : null;
+            const limit = req.query.limit && !isNaN(req.query.limit) ? parseInt(req.query.limit) : null;
             let match = { role: UserTypes.USER, is_deleted: false };
             const search = req.query.search || "";
 
@@ -167,12 +167,11 @@ const getUserList = async (req, user, res) => {
             const result = await query;
             const total_count = await UserSchema.countDocuments(match);
 
-            console.log((skip && limit) ? { rows: result, total_count } : result, ">>> the result ")
             if (result.length > 0) {
 
                 return responseData.success(
                     res,
-                    (skip && limit) ? { rows: result, total_count } : result,
+                    (skip != null && limit != null) ? { rows: result, total_count } : result,
                     `User ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
                 );
             } else {

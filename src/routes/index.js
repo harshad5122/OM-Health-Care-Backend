@@ -8,6 +8,7 @@ const routes = [
     `room`,
     `user`,
     `staff`,
+    `appointment`
 ];
 
 routes.forEach((route) => require(`./${route}`)(api));

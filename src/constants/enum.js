@@ -15,8 +15,40 @@ const MessageStatus = Object.freeze({
     SEEN: 'seen'
 });
 
+const VisitType = Object.freeze({
+    CLINIC: "CLINIC",
+    HOME: "HOME"
+})
+
+const WeekDays = Object.freeze({
+    MONDAY: "MONDAY",
+    TUESDAY: "TUESDAY",
+    WEDNESDAY: "WEDNESDAY",
+    THURSDAY: "THURSDAY",
+    FRIDAY: "FRIDAY",
+    SATURDAY: "SATURDAY",
+    SUNDAY: "SUNDAY"
+});
+
+const AppointmentStatus = Object.freeze({
+    BOOKED: "BOOKED",
+    PENDING: "PENDING",
+    CONFIRMED: "CONFIRMED",
+    CANCELLED: "CANCELLED"
+});
+const defaultWeeklySchedule = Object.values(WeekDays).map(day => ({
+    day,
+    time_slots: [
+        { start: "08:00", end: "20:00", visit_type: VisitType.CLINIC }
+    ]
+}));
+
 module.exports = {
     UserRole,
     UserTypes,
-    MessageStatus
+    MessageStatus,
+    VisitType,
+    WeekDays,
+    AppointmentStatus,
+    defaultWeeklySchedule
 }

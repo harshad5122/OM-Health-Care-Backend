@@ -43,7 +43,10 @@ const urlConstants = {
     EDIT_DOCTOR: '/edit/doctor/:_id',
     DELETE_DOCTOR: '/delete/doctor/:_id',
 
-    GET_DOCTOR_BY_ID: '/get/doctor/:_id'
+    GET_DOCTOR_BY_ID: '/get/doctor/:_id',
+
+    CREATE_APPPOINTMENT: '/create-appointment'
+
 }
 
 module.exports = urlConstants;

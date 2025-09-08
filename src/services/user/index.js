@@ -136,7 +136,6 @@ const getUserList = async (req, user, res) => {
             const from_date = req.query.from_date ? new Date(req.query.from_date) : null;
             const to_date = req.query.to_date ? new Date(req.query.to_date) : null;
             let match = { role: UserTypes.USER, is_deleted: false };
-
             const search = req.query.search || "";
 
             if (search) {
@@ -162,7 +161,8 @@ const getUserList = async (req, user, res) => {
                     ],
                 };
             }
-            if (from_date || to_date) {
+            const isValidDate = (d) => d instanceof Date && !isNaN(d);
+            if (isValidDate(from_date) || isValidDate(to_date)) {
                 const dateFilter = {};
                 if (from_date) dateFilter.$gte = from_date;
                 if (to_date) dateFilter.$lte = to_date;

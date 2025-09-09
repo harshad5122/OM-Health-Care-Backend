@@ -36,6 +36,7 @@ const urlConstants = {
     DELETE_USER: '/delete/user/:_id',
     USER_ADD: '/user/add',
     GET_USER_BY_ID: '/user/:_id',
+    GET_ALL_CHAT_USER: '/chat/users',
 
     //STAFF ROUTES
     ADD_DOCTOR: '/add/doctor',

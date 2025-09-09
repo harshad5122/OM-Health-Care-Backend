@@ -1,10 +1,13 @@
 // services/user/index.js
 
 const UserSchema = require('../../models/user');
+const MessageSchema = require('../../models/message');
 const { responseData, messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../../constants');
 const { logger, mail } = require('../../utils');
-const { UserTypes } = require('../../constants/enum');
+const { UserTypes, MessageStatus } = require('../../constants/enum');
 const { cryptoGraphy } = require('../../middlewares');
+
+
 
 // services/userService.js
 
@@ -150,7 +153,7 @@ const getUserList = async (req, user, res) => {
                                 {
                                     $expr: {
                                         $regexMatch: {
-                                            input: { $toString: "$phone" }, // ✅ safe for number/string
+                                            input: { $toString: "$phone" }, // safe for number/string
                                             regex: search,
                                             options: "i",
                                         },
@@ -330,6 +333,104 @@ const deleteUser = async (req, userDetails, res) => {
 };
 
 
+const getAllUsersWithChatInfo = async (req, user, res) => {
+  return new Promise(async () => {
+    try {
+      // fetch users (not deleted)
+      const users = await UserSchema.find({ is_deleted: false })
+        .select('_id firstname lastname email role is_online last_seen')
+        .sort({ created_at: -1 });
+
+      if (!users || users.length === 0) {
+        return responseData.fail(res, messageConstants.LIST_NOT_FOUND, 204);
+      }
+
+      const currentUserId = user?._id ?? null;
+
+      const userData = await Promise.all(
+        users.map(async (u) => {
+          // get last message between current user and this user
+          const lastMessage = await MessageSchema.findOne({
+            $or: [
+              { sender_id: u._id, receiver_id: currentUserId },
+              { sender_id: currentUserId, receiver_id: u._id },
+            ],
+            is_deleted: false,
+          })
+            .sort({ created_at: -1 })
+            .select('message message_type created_at sender_id updated_at');
+
+          // human-friendly preview (emoji for media)
+          let messagePreview = "";
+          if (lastMessage) {
+            switch (lastMessage.message_type) {
+              case "text":
+                messagePreview = lastMessage.message || "";
+                break;
+              case "image":
+                messagePreview = "📷 Photo";
+                break;
+              case "video":
+                messagePreview = "📹 Video";
+                break;
+              case "audio":
+                messagePreview = "🎵 Audio";
+                break;
+              case "document":
+                messagePreview = "📄 Document";
+                break;
+              case "location":
+                messagePreview = "📍 Location";
+                break;
+              default:
+                messagePreview = "Message";
+            }
+          }
+
+          // unread count = messages sent by this user to current user that are NOT 'seen'
+          const unreadCount = currentUserId
+            ? await MessageSchema.countDocuments({
+                sender_id: u._id,
+                receiver_id: currentUserId,
+                message_status: { $ne: MessageStatus.SEEN }, // use your enum
+                is_deleted: false,
+              })
+            : 0;
+
+          return {
+            user_id: u._id,
+            name: `${u.firstname} ${u.lastname}`,
+            email: u.email,
+            role: u.role,
+            isOnline: u.is_online,
+            last_message: lastMessage
+              ? {
+                  text: lastMessage.message ?? null,
+                  type: lastMessage.message_type ?? null,
+                  created_at: lastMessage.created_at,     // <-- ISO date (use client to format)
+                  sender_id: lastMessage.sender_id ?? null,
+                }
+              : null,
+            messagePreview,   // short preview/emoji used in list
+            unreadCount,
+          };
+        })
+      );
+
+      return responseData.success(
+        res,
+        userData,
+        `Users ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
+      );
+    } catch (error) {
+      logger.error("Get All Users with Chat Info " + messageConstants.INTERNAL_SERVER_ERROR, error);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+  });
+};
+
+
+
 module.exports = {
     getAdminList,
     getStaffList,
@@ -339,4 +440,5 @@ module.exports = {
     editUser,
     deleteUser,
     createUser,
+    getAllUsersWithChatInfo,
 };

@@ -95,6 +95,19 @@ const createUser = async (req, res) => {
         res.send(err);
     }
 }
+
+const getAllUsersWithChatInfo = async (req, res) => {
+    try {
+        const response = await userService.getAllUsersWithChatInfo(req, req?.userDetails, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} get all users with chat info API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`Get All Users With Chat Info ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
+
 module.exports = {
     getAdminList,
     getStaffList,
@@ -103,5 +116,6 @@ module.exports = {
     updateUserProfile,
     editUser,
     deleteUser,
-    createUser
+    createUser,
+    getAllUsersWithChatInfo,
 }

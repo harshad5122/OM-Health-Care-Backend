@@ -8,7 +8,7 @@ const { responseData, messageConstants, mailTemplateConstants, mailSubjectConsta
 const moment = require("moment");
 const StaffLeaveSchema = require('../../models/staff_leave')
 const NotificationSchema = require('../../models/notification')
-// const { io } = require('../../index');
+const SocketSchema = require('../../models/socket')
 
 const createAppointment = async (req, res) => {
     return new Promise(async () => {
@@ -39,7 +39,10 @@ const createAppointment = async (req, res) => {
                 read: false
             });
             const io = req.app.get('socketio');
-            io.to(`${user?._id}`).emit("appointmentRequest", {
+
+            const doctorSocket = await SocketSchema.findOne({ user_id: user._id });
+
+            io.to(`${doctorSocket.socket_id}`).emit("appointmentRequest", {
                 appointment,
                 message: notification.message,
                 notificationId: notification._id

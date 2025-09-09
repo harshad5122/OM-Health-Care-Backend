@@ -43,6 +43,13 @@ const defaultWeeklySchedule = Object.values(WeekDays).map(day => ({
     ]
 }));
 
+const NotificationType = Object.freeze({
+    APPOINTMENT_REQUEST: "APPOINTMENT_REQUEST",
+    APPOINTMENT_CONFIRMED: "APPOINTMENT_CONFIRMED",
+    MESSAGE: "MESSAGE",
+    SYSTEM: "SYSTEM"
+})
+
 module.exports = {
     UserRole,
     UserTypes,
@@ -50,5 +57,6 @@ module.exports = {
     VisitType,
     WeekDays,
     AppointmentStatus,
-    defaultWeeklySchedule
+    defaultWeeklySchedule,
+    NotificationType
 }

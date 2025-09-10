@@ -217,6 +217,8 @@ const getAppontmentByDoctor = async (req, res) => {
                         type: "booked",
                         status: appt?.status,
                         id: appt?._id,
+                        visit_type: appt?.visit_type,
+                        patient_id: appt?.patient_id
                     });
                     if (dayStatus[dateStr].status !== "leave") {
                         dayStatus[dateStr].status = "available";
@@ -251,6 +253,8 @@ const getAppontmentByDoctor = async (req, res) => {
                         type: "booked",
                         status: appt?.status,
                         id: appt?._id,
+                        visit_type: appt?.visit_type,
+                        patient_id: appt?.patient_id
                     });
                     if (dayStatus[dateStr].status !== "leave") {
                         dayStatus[dateStr].status = "available";

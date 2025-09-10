@@ -146,7 +146,7 @@ const getAppontmentByDoctor = async (req, res) => {
             const { from, to } = req.query;
 
             // Build query — filter by date only if both from+to provided
-            const query = { staff_id: doctorId };
+            const query = { staff_id: doctorId, status: { $ne: AppointmentStatus?.CANCELLED } };
             let startDate, endDate;
             const hasRange = from && to;
             if (hasRange) {

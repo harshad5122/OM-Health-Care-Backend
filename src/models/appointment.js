@@ -3,8 +3,8 @@ const { AppointmentStatus, VisitType } = require('../constants/enum')
 
 const AppointmentSchema = new mongoose.Schema(
     {
-        staff_id: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
-        patient_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        staff_id: { type: mongoose.Schema.Types.ObjectId, ref: "staff", required: true },
+        patient_id: { type: mongoose.Schema.Types.ObjectId, ref: "users", required: true },
         date: { type: Date, required: true },
         time_slot: {
             start: { type: String, required: true },
@@ -19,7 +19,8 @@ const AppointmentSchema = new mongoose.Schema(
         created_by: {
             type: String,
             enum: ["ADMIN", "USER"]
-        }
+        },
+        creator: { type: mongoose.Schema.Types.ObjectId, ref: "users", required: true },
     },
     { timestamps: true }
 );

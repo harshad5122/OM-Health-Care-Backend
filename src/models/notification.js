@@ -5,18 +5,18 @@ const NotificationSchema = new mongoose.Schema(
     {
         sender_id: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User",          // doctor or patient receiving notification
+            ref: "users",          // doctor or patient receiving notification
             required: true,
         },
         receiver_id: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User",          // doctor or patient receiving notification
+            ref: "users",          // doctor or patient receiving notification
             required: true,
         },
         type: {
             type: String,
             enum: Object?.keys(NotificationType),
-            default: "system",
+            default: "SYSTEM",
         },
         message: {
             type: String,

@@ -7,7 +7,7 @@ const LeaveSlotSchema = new mongoose.Schema({
 
 const StaffLeaveSchema = new mongoose.Schema(
     {
-        staff_id: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
+        staff_id: { type: mongoose.Schema.Types.ObjectId, ref: "staff", required: true },
         date: { type: Date, required: true },   // specific leave date
         reason: { type: String },
         full_day: { type: Boolean, default: false },

@@ -33,9 +33,19 @@ const getPatients = async (req, res) => {
         res.send(err);
     }
 }
-
+const updateAppointmentStatus = async (req, res) => {
+    try {
+        const response = await appointmentService?.updateAppointmentStatus(req, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} update appointment API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`Update appointment ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
 module.exports = {
     createAppointment,
     getAppontmentByDoctor,
-    getPatients
+    getPatients,
+    updateAppointmentStatus
 }

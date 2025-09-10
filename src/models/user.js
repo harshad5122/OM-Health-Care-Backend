@@ -82,11 +82,11 @@ const userSchema = mongoose.Schema({
         type: Boolean,
         default: false
     },
-    otp: { 
+    otp: {
         type: String,
         default: null
     },
-    otpExpiresAt: { 
+    otpExpiresAt: {
         type: Date,
         default: null
     },
@@ -106,7 +106,7 @@ const userSchema = mongoose.Schema({
     },
     staff_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Staff", // <-- link to Staff collection
+        ref: "staff", // <-- link to Staff collection
         required: false
     },
     status: {

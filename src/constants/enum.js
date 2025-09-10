@@ -46,6 +46,7 @@ const defaultWeeklySchedule = Object.values(WeekDays).map(day => ({
 const NotificationType = Object.freeze({
     APPOINTMENT_REQUEST: "APPOINTMENT_REQUEST",
     APPOINTMENT_CONFIRMED: "APPOINTMENT_CONFIRMED",
+    APPOINTMENT_CANCELLED: "APPOINTMENT_CANCELLED",
     MESSAGE: "MESSAGE",
     SYSTEM: "SYSTEM"
 })

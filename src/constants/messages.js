@@ -32,7 +32,10 @@ const messageConstants = {
     DELETE_SUCCESS: 'User Deleted Successfull',
     CHANGE_PASSWORD: "Password changed successfully",
     CHANGE_PASSWORD_FAILED: "Failed to change password",
-    FETCHED_SUCCESSFULLY: "Data fatched successfully"
+    FETCHED_SUCCESSFULLY: "Data fatched successfully",
+    UPDATED_SUCCESSDULLY: "Updated successfully",
+    DATA_SAVED_SUCCESSFULLY: "Data has been saved successfully"
+
 
 }
 

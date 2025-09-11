@@ -149,9 +149,14 @@ const getDoctor = async (req, userDetails, res) => {
                   firstname: 1,
                   lastname: 1,
                   email: 1,
-                  countryCode: 1,
-                  phone: 1,
-                  dob: 1,
+                  phone: { $concat: ["$countryCode", " ", "$phone"] },
+                  dob: {
+                    $cond: {
+                      if: { $ifNull: ["$dob", false] },
+                      then: { $dateToString: { format: "%m/%d/%Y", date: "$dob" } },
+                      else: null
+                    }
+                  },
                   gender: 1,
                   address: 1,
                   city: 1,
@@ -162,50 +167,14 @@ const getDoctor = async (req, userDetails, res) => {
                   specialization: 1,
                   occupation: 1,
                   professionalStatus: 1,
-                  created_at: 1,
-                  updated_at: 1,
-                  is_deleted: 1,
-                  status: 1,
-
-                  // flatten workExperience
                   workExperience_totalYears: "$workExperience.totalYears",
                   workExperience_lastHospital: "$workExperience.lastHospital",
                   workExperience_position: "$workExperience.position",
-                  workExperience_workAddress_hospitalName: "$workExperience.workAddress.hospitalName",
-                  workExperience_workAddress_line1: "$workExperience.workAddress.line1",
-                  workExperience_workAddress_city: "$workExperience.workAddress.city",
-                  workExperience_workAddress_state: "$workExperience.workAddress.state",
-                  workExperience_workAddress_country: "$workExperience.workAddress.country",
-                  workExperience_workAddress_pincode: "$workExperience.workAddress.pincode",
-
-                  // flatten familyDetails
-                  familyDetails_father_name: "$familyDetails.father.name",
-                  familyDetails_father_contact: "$familyDetails.father.contact",
-                  familyDetails_father_occupation: "$familyDetails.father.occupation",
-
-                  familyDetails_mother_name: "$familyDetails.mother.name",
-                  familyDetails_mother_contact: "$familyDetails.mother.contact",
-                  familyDetails_mother_occupation: "$familyDetails.mother.occupation",
-
-                  familyDetails_permanentAddress_line1: "$familyDetails.permanentAddress.line1",
-                  familyDetails_permanentAddress_line2: "$familyDetails.permanentAddress.line2",
-                  familyDetails_permanentAddress_city: "$familyDetails.permanentAddress.city",
-                  familyDetails_permanentAddress_state: "$familyDetails.permanentAddress.state",
-                  familyDetails_permanentAddress_country: "$familyDetails.permanentAddress.country",
-                  familyDetails_permanentAddress_pincode: "$familyDetails.permanentAddress.pincode",
-
-                  familyDetails_currentAddress_line1: "$familyDetails.currentAddress.line1",
-                  familyDetails_currentAddress_line2: "$familyDetails.currentAddress.line2",
-                  familyDetails_currentAddress_city: "$familyDetails.currentAddress.city",
-                  familyDetails_currentAddress_state: "$familyDetails.currentAddress.state",
-                  familyDetails_currentAddress_country: "$familyDetails.currentAddress.country",
-                  familyDetails_currentAddress_pincode: "$familyDetails.currentAddress.pincode",
-
-                  familyDetails_sameAsPermanent: "$familyDetails.sameAsPermanent",
-
-                  familyDetails_emergencyContact_name: "$familyDetails.emergencyContact.name",
-                  familyDetails_emergencyContact_relation: "$familyDetails.emergencyContact.relation",
-                  familyDetails_emergencyContact_contact: "$familyDetails.emergencyContact.contact",
+                  father_name: "$familyDetails.father.name",
+                  mother_name: "$familyDetails.mother.name",
+                  emergencyContact_name: "$familyDetails.emergencyContact.name",
+                  emergencyContact_relation: "$familyDetails.emergencyContact.relation",
+                  emergencyContact_contact: "$familyDetails.emergencyContact.contact",
                 },
               },
 

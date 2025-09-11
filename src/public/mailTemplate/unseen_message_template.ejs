@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>Unseen Messages Reminder</title>
+  <style>
+    table, td, div, h1, p {
+      font-family: Arial, sans-serif;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #ffffff;
+      background: #0069d9;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+    .btn:hover {
+      background: #0053aa;
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f4;">
+  <table role="presentation" style="width:100%;border-collapse:collapse;border:0;background:#f4f4f4;">
+    <tr>
+      <td align="center" style="padding:30px 0;">
+        <table role="presentation" style="width:600px;border-collapse:collapse;border:1px solid #cccccc;background:#ffffff;text-align:left;border-radius:8px;overflow:hidden;">
+          
+          <!-- Header -->
+          <tr>
+            <td align="center" style="padding:30px;background:#0069d9;color:#ffffff;">
+              <h1 style="margin:0;font-size:26px;font-weight:bold;">You Have Unseen Messages</h1>
+              <p style="margin:5px 0 0;font-size:16px;">Don’t miss out on your conversations</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 30px 42px 30px;color:#153643;">
+              <h2 style="font-size:22px;margin:0 0 20px 0;">Hello <%= content.firstname %> <%= content.lastname %>,</h2>
+              
+              <p style="margin:0 0 16px;font-size:16px;line-height:24px;">
+                You have <strong><%= content.unseenCount %> unread message(s)</strong> waiting for you on <b>Om Health Care Chat</b>.
+              </p>
+              
+              <p style="margin:0 0 16px;font-size:16px;line-height:24px;">
+                Open the app now to check your latest messages and continue your conversations.
+              </p>
+
+              <p style="margin:30px 0 0;font-size:16px;line-height:24px;">
+                <a href="<%= content.appUrl || '#' %>" class="btn">Open Chat</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px;background:#0069d9;text-align:center;color:#ffffff;font-size:14px;">
+              © <%= new Date().getFullYear() %> Om Health Care. All rights reserved.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

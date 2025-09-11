@@ -2,9 +2,11 @@ const SocketSchema = require('../models/socket');
 const MessageSchema = require('../models/message');
 const GroupMessageSchema = require('../models/group_message');
 const RoomSchema = require('../models/room');  
-const User = require('../models/user')
+const User = require('../models/user');
+const NotificationSchema = require('../models/notification');
 const { logger } = require("../utils");
-const { messageConstants } = require('../constants');
+const { messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../constants');
+const { NotificationType, MessageStatus } = require('../constants/enum');
 const mongoose = require("mongoose");
 
 
@@ -275,6 +277,17 @@ module.exports = (io) => {
                 : [];
 
                 const receiverSocketData = await SocketSchema.findOne({ user_id: data.receiver_id });
+
+                // CREATE NOTIFICATION in DB
+            const notification = await NotificationSchema.create({
+                sender_id: data.sender_id,
+                receiver_id: data.receiver_id,
+                type: NotificationType.MESSAGE,  // new enum type
+                message: saveMessage.message || "New message",
+                reference_id: saveMessage._id,
+                reference_model: "Message",
+            });
+
                 if (receiverSocketData) {
                     const fullMessage = {
                         ...saveMessage.toObject(),
@@ -287,18 +300,23 @@ module.exports = (io) => {
                     await MessageSchema.findByIdAndUpdate(saveMessage._id, {
                         message_status: 'delivered'
                     });
-    
+
                     io.to(receiverSocketData.socket_id).emit('receiveNotification', {
-                        type: 'message',
-                        isGroup: false,
-                        message: saveMessage.message,
-                        senderId: data.sender_id,
-                        createdAt: saveMessage.created_at,
-                        message_type: saveMessage.message_type,
-                        attechment_details: attachmentDetails,
-                        latitude: saveMessage.latitude,
-                        longitude: saveMessage.longitude,
-                    });
+                    ...notification.toObject(),
+                    attechment_details: attachmentDetails,
+                });
+    
+                    // io.to(receiverSocketData.socket_id).emit('receiveNotification', {
+                    //     type: 'message',
+                    //     isGroup: false,
+                    //     message: saveMessage.message,
+                    //     senderId: data.sender_id,
+                    //     createdAt: saveMessage.created_at,
+                    //     message_type: saveMessage.message_type,
+                    //     attechment_details: attachmentDetails,
+                    //     latitude: saveMessage.latitude,
+                    //     longitude: saveMessage.longitude,
+                    // });
 
                     const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
                     if (senderSocketData) {
@@ -310,6 +328,44 @@ module.exports = (io) => {
                 } else {
                     logger.error(messageConstants.RECEIVER_NOT_FOUND);
                 }
+
+                 // -----------------------------
+            // EMAIL REMINDER LOGIC
+            // -----------------------------
+            setTimeout(async () => {
+                try {
+                    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+                    const unseenMessages = await MessageSchema.find({
+                        receiver_id: data.receiver_id,
+                        message_status: { $ne: MessageStatus.SEEN },
+                        createdAt: { $gte: oneHourAgo }
+                    });
+
+                    if (unseenMessages.length > 0) {
+                        const receiverUser = await User.findById(data.receiver_id);
+
+                        if (receiverUser && receiverUser.email) {
+                            const mailContent = {
+                                firstname: receiverUser.firstname || '',
+                                lastname: receiverUser.lastname || '',
+                                unseenCount: unseenMessages.length,
+                            };
+
+                            await mail.sendMailToUser(
+                                mailTemplateConstants.UNSEEN_MESSAGE_TEMPLATE,
+                                receiverUser.email,
+                                mailSubjectConstants.UNSEEN_MESSAGE_ALERT,
+                                mailContent
+                            );
+
+                            logger.info(`📧 Email sent to ${receiverUser.email} for ${unseenMessages.length} unseen messages`);
+                        }
+                    }
+                } catch (error) {
+                    logger.error("Error sending unseen message email", error);
+                }
+            }, 60 * 60 * 1000); // 1 hour
             }
         });
 
@@ -390,8 +446,9 @@ module.exports = (io) => {
                 return socket.emit('error', { message: 'Message not found' });
             }
         
-            if (message.message_status !== 'seen') {
-                await Model.findByIdAndUpdate(messageId, {  message_status: 'seen'  }, { new: true });
+            // if (message.message_status !== 'seen') {
+            if (message.message_status !== 'seen' && !message.is_read) { 
+                await Model.findByIdAndUpdate(messageId, {  message_status: 'seen', is_read: true }, { new: true });
         
                 // Notify sender that message has been seen
                 const senderSocketData = await SocketSchema.findOne({ user_id: message.sender_id });
@@ -399,6 +456,7 @@ module.exports = (io) => {
                     io.to(senderSocketData.socket_id).emit('message_seen', {
                         messageId,
                         message_status: 'seen',
+                        is_read: true,
                         seen_by: user_id
                     });
                 }

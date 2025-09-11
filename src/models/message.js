@@ -56,6 +56,11 @@ const MessageSchema = new mongoose.Schema({
         default: MessageStatus.SENT
     },
 
+    is_read: {               
+        type: Boolean,
+        default: false
+    },
+
     created_at: {
         type: Date,
         required: true,

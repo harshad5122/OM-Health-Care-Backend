@@ -73,12 +73,12 @@ const createLeave = async (req, res) => {
         await leave.save();
 
         const admins = await UserSchema.find({ role: 2 });
-        const user = await UserSchema?.findOne({ staff_id });
-
+        // const user = await UserSchema?.findOne({ staff_id });
+// console.log(user,staff_id,">>LLL")
         const notifications = await Promise.all(
             admins.map(async (admin) => {
               const notification = await NotificationSchema.create({
-                sender_id: user?._id,
+                sender_id: staff_id,
                 receiver_id: admin._id,
                 type: NotificationType.LEAVE_REQUEST,
                 message: `New leave request from staff ${staff_name} from ${dayjs(startDate).format("YYYY-MM-DD")} to ${dayjs(endDate).format("YYYY-MM-DD")}`,

@@ -103,6 +103,29 @@ const mergeIntervals = (intervals) => {
     }
     return merged;
 };
+function mergeSlots(slots) {
+    slots.sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+  
+    const merged = [];
+    let current = slots[0];
+  
+    for (let i = 1; i < slots.length; i++) {
+      const next = slots[i];
+      if (toMinutes(next.start) <= toMinutes(current.end)) {
+        // overlapping or continuous → merge
+        current.end = next.end > current.end ? next.end : current.end;
+      } else {
+        merged.push(current);
+        current = next;
+      }
+    }
+    merged.push(current);
+    return merged;
+  }
+  
+  
+
+  
 
 // Subtract booked intervals from schedule
 const subtractIntervals = (schedule, booked) => {
@@ -909,14 +932,15 @@ const updateAppointment = async (req, res) => {
 
             const effectiveSlots = buildEffectiveSlots(allBookings, appointment);
 
-            console.log(effectiveSlots, ">LOPPPP")
+            console.log(effectiveSlots, ">> Effective slots")
             // function that merges old appointment slot into available slots
 
             const { start, end } = newTimeSlot;
             const apptStart = toMinutes(start);
             const apptEnd = toMinutes(end);
+            const mergedAvail = mergeSlots(effectiveSlots);
 
-            const isInsideAvailable = effectiveSlots.some((a) => {
+            const isInsideAvailable = mergedAvail.some((a) => {
                 const availableStart = toMinutes(a.start);
                 const availableEnd = toMinutes(a.end);
                 return apptStart >= availableStart && apptEnd <= availableEnd;

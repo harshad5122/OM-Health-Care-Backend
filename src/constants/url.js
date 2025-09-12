@@ -53,7 +53,9 @@ const urlConstants = {
     UPDATE_APPOINTMENT: '/update-appointment',
 
     GET_NOTIFICATION: '/notification',
-    MAEK_SEEN: '/mark-seen/:_id'
+    MAEK_SEEN: '/mark-seen/:_id',
+
+    CREATE_LEAVE:'/create-leave'
 
 }
 

@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { leaveStatus } = require("../constants/enum");
 
 const LeaveSlotSchema = new mongoose.Schema({
     start: { type: String },   // optional if partial leave
@@ -8,10 +9,21 @@ const LeaveSlotSchema = new mongoose.Schema({
 const StaffLeaveSchema = new mongoose.Schema(
     {
         staff_id: { type: mongoose.Schema.Types.ObjectId, ref: "staff", required: true },
-        date: { type: Date, required: true },   // specific leave date
+        start_date: { type: Date, required: true },   // leave start date
+        end_date: { type: Date, required: true },     // leave end date
+    
+        // Optional for hourly leaves (within a day)
+        start_time: { type: String },   // "HH:mm"
+        end_time: { type: String },     // "HH:mm"
+    
         reason: { type: String },
         full_day: { type: Boolean, default: false },
-        blocked_slots: [LeaveSlotSchema]   // if doctor unavailable for part of the day
+        status: {
+            type: String,
+            enum: Object.values(leaveStatus),
+            default: leaveStatus.PENDING
+        }
+        
     },
     { timestamps: true }
 );

@@ -36,6 +36,13 @@ const AppointmentStatus = Object.freeze({
     CONFIRMED: "CONFIRMED",
     CANCELLED: "CANCELLED"
 });
+
+const leaveStatus = Object.freeze({
+
+    PENDING: "PENDING",
+    CONFIRMED: "CONFIRMED",
+    CANCELLED: "CANCELLED"
+});
 const defaultWeeklySchedule = Object.values(WeekDays).map(day => ({
     day,
     time_slots: [
@@ -48,7 +55,10 @@ const NotificationType = Object.freeze({
     APPOINTMENT_CONFIRMED: "APPOINTMENT_CONFIRMED",
     APPOINTMENT_CANCELLED: "APPOINTMENT_CANCELLED",
     MESSAGE: "MESSAGE",
-    SYSTEM: "SYSTEM"
+    SYSTEM: "SYSTEM",
+    LEAVE_REQUEST:"LEAVE_REQUEST",
+    LEAVE_CONFIRMED:"LEAVE_CONFIRMED",
+    LEAVE_CANCELED:"LEAVE_CANCELLED"
 })
 
 module.exports = {
@@ -59,5 +69,6 @@ module.exports = {
     WeekDays,
     AppointmentStatus,
     defaultWeeklySchedule,
-    NotificationType
+    NotificationType,
+    leaveStatus
 }

@@ -28,7 +28,7 @@ const NotificationSchema = new mongoose.Schema(
         },
         reference_model: {
             type: String,
-            enum: ["Appointment", "Message", "Other"],
+            enum: ["Appointment", "Message", "Other","StaffLeave"],
         },
         read: {
             type: Boolean,

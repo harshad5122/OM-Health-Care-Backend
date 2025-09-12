@@ -965,28 +965,54 @@ const updateAppointment = async (req, res) => {
             console.log(newDate, ">> new Date ")
 
             // 6. Notify doctor
-            const notifPayload = {
-                sender_id: actorId,
-                receiver_id: appointment.staff_id._id,
-                type: NotificationType.APPOINTMENT_UPDATED,
-                message: `Appointment has been updated to ${moment(newDate).format("YYYY-MM-DD")} (${newTimeSlot.start}-${newTimeSlot.end}). Please confirm.`,
+            // const notifPayload = {
+            //     sender_id: actorId,
+            //     receiver_id: appointment.staff_id._id,
+            //     type: NotificationType.APPOINTMENT_UPDATED,
+            //     message: `Appointment has been updated to ${moment(newDate).format("YYYY-MM-DD")} (${newTimeSlot.start}-${newTimeSlot.end}). Please confirm.`,
+            //     reference_id: appointment._id,
+            //     reference_model: "Appointment",
+            //     read: false
+            // };
+
+            // const notification = await NotificationSchema.create(notifPayload);
+
+            // // emit via socket if doctor is online
+            // const io = req.app?.get("socketio");
+            // const socketRec = await SocketSchema.findOne({ user_id: appointment.staff_id._id });
+            // if (io && socketRec?.socket_id) {
+            //     io.to(socketRec.socket_id).emit("appointmentUpdated", {
+            //         ...notifPayload,
+            //         _id: notification._id,
+            //         createdAt: notification.createdAt
+            //     });
+            // }
+
+            const user = await UserSchema?.findOne({ staff_id:appointment?.staff_id });
+            const notification = await NotificationSchema.create({
+                sender_id: patient_id,
+                receiver_id: user?._id,
+                type: NotificationType.APPOINTMENT_REQUEST,
+                message: `Appointment request from patient ${patient_name} on ${date} (${time_slot})`,
                 reference_id: appointment._id,
                 reference_model: "Appointment",
                 read: false
-            };
+            });
+            const io = req.app.get('socketio');
 
-            const notification = await NotificationSchema.create(notifPayload);
+            const doctorSocket = await SocketSchema.findOne({ user_id: user._id });
 
-            // emit via socket if doctor is online
-            const io = req.app?.get("socketio");
-            const socketRec = await SocketSchema.findOne({ user_id: appointment.staff_id._id });
-            if (io && socketRec?.socket_id) {
-                io.to(socketRec.socket_id).emit("appointmentUpdated", {
-                    ...notifPayload,
-                    _id: notification._id,
-                    createdAt: notification.createdAt
-                });
-            }
+            io.to(`${doctorSocket.socket_id}`).emit("appointmentRequest", {
+                _id: notification?._id,
+                sender_id: patient_id,
+                receiver_id: user?._id,
+                type: NotificationType.APPOINTMENT_REQUEST,
+                message: `Appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+                reference_id: appointment._id,
+                reference_model: "Appointment",
+                read: false
+            });
+
 
             return responseData.success(res, { appointment }, messageConstants.DATA_UPDATED_SUCCESSFULLY);
 

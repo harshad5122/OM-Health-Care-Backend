@@ -9,7 +9,8 @@ const routes = [
     `user`,
     `staff`,
     `appointment`,
-    `notification`
+    `notification`,
+    `leave`
 ];
 
 routes.forEach((route) => require(`./${route}`)(api));

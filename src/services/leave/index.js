@@ -1,6 +1,6 @@
 
 const { responseData, messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../../constants');
-const { NotificationType } = require('../../constants/enum');
+const { NotificationType, leaveStatus } = require('../../constants/enum');
 const NotificationSchema = require('../../models/notification')
 const StaffLeaveSchema = require('../../models/staff_leave')
 const SocketSchema = require('../../models/socket')
@@ -73,11 +73,12 @@ const createLeave = async (req, res) => {
         await leave.save();
 
         const admins = await UserSchema.find({ role: 2 });
+        const user = await UserSchema?.findOne({ staff_id });
 
         const notifications = await Promise.all(
             admins.map(async (admin) => {
               const notification = await NotificationSchema.create({
-                sender_id: staff_id,
+                sender_id: user?._id,
                 receiver_id: admin._id,
                 type: NotificationType.LEAVE_REQUEST,
                 message: `New leave request from staff ${staff_name} from ${dayjs(startDate).format("YYYY-MM-DD")} to ${dayjs(endDate).format("YYYY-MM-DD")}`,
@@ -173,8 +174,122 @@ const getLeavesByProvider = async (req, res) => {
 })
   };
   
+  const updateLeaveStatus = async (req, res) => {
+    return new Promise(async () => {
+        try {
+            const { reference_id, sender_id, status, message, notification_id } = req?.body
+            const actorId = req.userDetails?._id;
+
+            // 1. validate input
+            if (!reference_id) {
+                return responseData.fail(res, "reference_id is required", 400);
+            }
+            if (!status || ![leaveStatus.CONFIRMED, leaveStatus.CANCELLED].includes(status)) {
+                return responseData.fail(res, "Invalid status. Must be CONFIRMED or CANCELLED.", 400);
+            }
+
+            // 2. fetch appointment
+            const leave = await StaffLeaveSchema.findByIdAndUpdate(
+                reference_id,
+                { status }, // update only status
+                { new: true } // return updated doc
+            );
+            if (!leaveStatus) {
+                return responseData.fail(res, "Leave not found", 404);
+            }
+
+            // 3. update status
+
+
+            // 4. mark original notification (if provided) as read/handled
+            if (notification_id) {
+                try {
+                    await NotificationSchema.findByIdAndUpdate(notification_id, { read: true });
+                } catch (err) {
+                    logger.warn("Failed to mark original notification as read", err);
+                }
+            }
+
+            // 5. build recipients set
+            // sender_id (from payload) is expected to be the original requester (patient/admin)
+            // appointment.creator is authoritative fallback
+            
+           
+            // 6. determine notification type and default message
+            const notifType = status === leaveStatus.CONFIRMED
+                ? (NotificationType?.LEAVE_CONFIRMED || "LEAVE_CONFIRMED")
+                : (NotificationType?.LEAVE_CANCELED || NotificationType?.LEAVE_CANCELED || "LEAVE_CANCELLED");
+
+                const startDate = new Date(leave.start_date).toDateString();
+                const endDate = new Date(leave.end_date).toDateString();
+                
+                const dateRange =
+                  startDate === endDate ? startDate : `${startDate} to ${endDate}`;
+                
+                const timeRange = leave.full_day ? "" : ` (${leave.start_time} - ${leave.end_time})`;
+                
+                const defaultMsg =
+                  status === leaveStatus.CONFIRMED
+                    ? `Your leave from ${dateRange}${timeRange} has been confirmed.`
+                    : `Your leave from ${dateRange}${timeRange} has been declined.`;
+
+            // 7. create notifications (one per user) and emit via socket if online
+            const createdNotifications = [];
+            const io = req.app?.get("socketio"); // your socket instance (may be undefined in some tests)
+
+           
+                const notifPayload = {
+                    sender_id: actorId || null,         // doctor who acted
+                    receiver_id: sender_id,
+                    type: notifType,
+                    message: defaultMsg,
+                    reference_id: leave._id,
+                    reference_model: "StaffLeave",
+                    read: false,
+                    reason: message
+                };
+
+                const created = await NotificationSchema.create(notifPayload);
+                createdNotifications.push(created);
+
+                const emitPayload = {
+                    ...notifPayload,
+                    _id: created._id,     // include DB id
+                    createdAt: created.createdAt
+                };
+
+                // send realtime if socket info available
+                try {
+                    // try to find socket record for receiver
+                    const socketRec = await SocketSchema.findOne({ user_id: sender_id });
+
+                    if (io && socketRec && socketRec.socket_id) {
+                        // emit directly to that socket id (recommended in your setup)
+                        io.to(socketRec.socket_id).emit("leaveStatusUpdated", emitPayload);
+                    } else if (io) {
+                        // optional: if you also join user rooms (userId) you could do:
+                        // io.to(String(receiverId)).emit(...)
+                        // or skip if offline
+                        logger.info(`Recipient ${sender_id} not connected via socket (socketRec missing). Notification saved to DB.`);
+                    }
+                } catch (emitErr) {
+                    logger.warn("Failed to emit socket notification", emitErr);
+                }
+       
+
+            // 8. return result
+            return responseData.success(res, { leave, notified: sender_id }, messageConstants.DATA_SAVED_SUCCESSFULLY);
+
+
+        } catch (error) {
+            console.error("update appointment error:", error);
+            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+        }
+    })
+}
 
 module.exports = {
     createLeave,
-    getLeavesByProvider
+    getLeavesByProvider,
+    updateLeaveStatus
 }

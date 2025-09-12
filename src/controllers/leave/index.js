@@ -23,8 +23,20 @@ res.send(response);
         res.send(err);
     }
 }
+const updateLeaveStatus = async (req,res) =>{
+    try{
+const response = await leaveServise?.updateLeaveStatus(req,res)
+logger.info(`${messageConstants.RESPONSE_FROM} update leave`, JSON.stringify(response));
+res.send(response);
+
+    }catch(err){
+        logger.error(`update leave ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
 
 module.exports = {
     createLeave,
-    getLeaveByDoctor
+    getLeaveByDoctor,
+    updateLeaveStatus
 }

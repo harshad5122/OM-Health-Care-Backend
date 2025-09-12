@@ -218,7 +218,7 @@ const getLeavesByProvider = async (req, res) => {
             // 6. determine notification type and default message
             const notifType = status === leaveStatus.CONFIRMED
                 ? (NotificationType?.LEAVE_CONFIRMED || "LEAVE_CONFIRMED")
-                : (NotificationType?.LEAVE_CANCELED || NotificationType?.LEAVE_CANCELED || "LEAVE_CANCELLED");
+                : (NotificationType?.LEAVE_CANCELLED || NotificationType?.LEAVE_CANCELLED || "LEAVE_CANCELLED");
 
                 const startDate = new Date(leave.start_date).toDateString();
                 const endDate = new Date(leave.end_date).toDateString();

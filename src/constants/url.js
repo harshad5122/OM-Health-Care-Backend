@@ -55,7 +55,8 @@ const urlConstants = {
     GET_NOTIFICATION: '/notification',
     MAEK_SEEN: '/mark-seen/:_id',
 
-    CREATE_LEAVE:'/create-leave'
+    CREATE_LEAVE:'/create-leave',
+    GET_LEAVE_BY_DOCTOR:'/get-leave/:_id'
 
 }
 

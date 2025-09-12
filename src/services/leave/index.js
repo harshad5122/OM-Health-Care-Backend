@@ -127,6 +127,54 @@ const createLeave = async (req, res) => {
 });
 };
 
+const getLeavesByProvider = async (req, res) => {
+    return new Promise(async () => {
+    try {
+      const  staff_id  = req.params?._id;  // provider ID from URL
+      const { start_date, end_date } = req.query; // optional filters
+  
+      if (!staff_id) {
+        return res.status(400).json({
+          success: false,
+          message: "Staff ID is required.",
+        });
+      }
+  
+      let query = { staff_id };
+  
+      // optional date range filter
+      if (start_date && end_date) {
+        query.$or = [
+          {
+            start_date: { $lte: new Date(end_date) },
+            end_date: { $gte: new Date(start_date) },
+          }
+        ];
+      }
+  
+      const leaves = await StaffLeaveSchema.find(query)
+        .sort({ start_date: 1 })
+        .lean();
+  
+      return responseData.success(
+        res,
+        leaves,
+        messageConstants.FETCHED_SUCCESSFULLY
+      );
+    } catch (error) {
+      console.error("getLeavesByProvider error:", error);
+      logger.error("getLeavesByProvider " + messageConstants.INTERNAL_SERVER_ERROR, error);
+      return responseData.fail(
+        res,
+        messageConstants.INTERNAL_SERVER_ERROR,
+        500
+      );
+    }
+})
+  };
+  
+
 module.exports = {
-    createLeave
+    createLeave,
+    getLeavesByProvider
 }

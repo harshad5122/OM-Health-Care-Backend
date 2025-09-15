@@ -4,10 +4,11 @@ const GroupMessageSchema = require('../models/group_message');
 const RoomSchema = require('../models/room');  
 const User = require('../models/user');
 const NotificationSchema = require('../models/notification');
-const { logger } = require("../utils");
+const { logger, mail } = require("../utils");
 const { messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../constants');
 const { NotificationType, MessageStatus } = require('../constants/enum');
 const mongoose = require("mongoose");
+const emailTimers = new Map();
 
 
 const onlineUsers = new Map();  // Track online users by user_id
@@ -175,199 +176,444 @@ module.exports = (io) => {
         });
         
         // Create a message (direct or group)
-        socket.on('chat_message', async (data) => {
-            if (data.replyTo) {
-                const repliedMessage = await MessageSchema.findById(data.reply_to);
-                if (!repliedMessage) {
-                    logger.error(`ReplyTo message ID ${data.replyTo} not found`);
-                    return;
-                }
-            }
+        // socket.on('chat_message', async (data) => {
+        //     if (data.replyTo) {
+        //         const repliedMessage = await MessageSchema.findById(data.reply_to);
+        //         if (!repliedMessage) {
+        //             logger.error(`ReplyTo message ID ${data.replyTo} not found`);
+        //             return;
+        //         }
+        //     }
         
-            let saveMessage, populatedMessage;
-            if (data.room_id) {
+        //     let saveMessage, populatedMessage;
+        //     if (data.room_id) {
                
-                const room = await RoomSchema.findById(data.room_id);
-                if (!room) {
-                    logger.error(`Room ID ${data.room_id} not found`);
-                    return;
-                }
+        //         const room = await RoomSchema.findById(data.room_id);
+        //         if (!room) {
+        //             logger.error(`Room ID ${data.room_id} not found`);
+        //             return;
+        //         }
 
-                const allReceivers = room.members.filter(id => id.toString() !== data.sender_id);
+        //         const allReceivers = room.members.filter(id => id.toString() !== data.sender_id);
 
-                data.receiver_id = allReceivers;
-                saveMessage = await createGroupMessage({ ...data, receiver_id: allReceivers });
+        //         data.receiver_id = allReceivers;
+        //         saveMessage = await createGroupMessage({ ...data, receiver_id: allReceivers });
         
-                if (!saveMessage) {
-                    logger.error(messageConstants.MESSAGE_NOT_SENT);
-                    return;
-                }
+        //         if (!saveMessage) {
+        //             logger.error(messageConstants.MESSAGE_NOT_SENT);
+        //             return;
+        //         }
                 
-                populatedMessage = await GroupMessageSchema.findById(saveMessage._id).populate('attechment_id');
+        //         populatedMessage = await GroupMessageSchema.findById(saveMessage._id).populate('attechment_id');
 
-                const attachmentDetails = populatedMessage && Array.isArray(populatedMessage.attechment_id)
-                ? populatedMessage.attechment_id.map(file => ({
-                    id: file._id,
-                    fileType: file.fileType,
-                    name: file.name,
-                    size: file.size,
-                    url: file.url
-                }))
-                : [];
+        //         const attachmentDetails = populatedMessage && Array.isArray(populatedMessage.attechment_id)
+        //         ? populatedMessage.attechment_id.map(file => ({
+        //             id: file._id,
+        //             fileType: file.fileType,
+        //             name: file.name,
+        //             size: file.size,
+        //             url: file.url
+        //         }))
+        //         : [];
 
-                io.to(data.room_id).emit('chat_message', {
-                    ...saveMessage.toObject(),
-                    attechment_details: attachmentDetails
-                });
+        //         io.to(data.room_id).emit('chat_message', {
+        //             ...saveMessage.toObject(),
+        //             attechment_details: attachmentDetails
+        //         });
     
-                io.to(data.room_id).emit('new_message', {
-                    ...saveMessage.toObject(),
-                    attechment_details: attachmentDetails
-                });
+        //         io.to(data.room_id).emit('new_message', {
+        //             ...saveMessage.toObject(),
+        //             attechment_details: attachmentDetails
+        //         });
 
-                await GroupMessageSchema.findByIdAndUpdate(saveMessage._id, {
-                    message_status: 'delivered'
-                });
+        //         await GroupMessageSchema.findByIdAndUpdate(saveMessage._id, {
+        //             message_status: 'delivered'
+        //         });
                 
-                const receiversSocketData = await SocketSchema.find({ 
-                    user_id: { $in: allReceivers }
-                });
+        //         const receiversSocketData = await SocketSchema.find({ 
+        //             user_id: { $in: allReceivers }
+        //         });
                   
-                for (const receiver of receiversSocketData) {
-                    io.to(receiver.user_id.toString()).emit('receiveNotification', {
-                        type: 'group-message',
-                        isGroup: true,
-                        senderId: data.sender_id,
-                        message: saveMessage.message,
-                        senderId: data.sender_id,
-                        createdAt: saveMessage.created_at,
-                        message_type: saveMessage.message_type,
-                        attechment_details: attachmentDetails,
-                        latitude: saveMessage.latitude,
-                        longitude: saveMessage.longitude,
-                    });
-                }
+        //         for (const receiver of receiversSocketData) {
+        //             io.to(receiver.user_id.toString()).emit('receiveNotification', {
+        //                 type: 'group-message',
+        //                 isGroup: true,
+        //                 senderId: data.sender_id,
+        //                 message: saveMessage.message,
+        //                 senderId: data.sender_id,
+        //                 createdAt: saveMessage.created_at,
+        //                 message_type: saveMessage.message_type,
+        //                 attechment_details: attachmentDetails,
+        //                 latitude: saveMessage.latitude,
+        //                 longitude: saveMessage.longitude,
+        //             });
+        //         }
                   
-                const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
-                if (senderSocketData) {
-                    io.to(senderSocketData.socket_id).emit('message_delivered', {
-                        _id: saveMessage._id,
-                        status: 'delivered'
-                    });     
-                }
+        //         const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
+        //         if (senderSocketData) {
+        //             io.to(senderSocketData.socket_id).emit('message_delivered', {
+        //                 _id: saveMessage._id,
+        //                 status: 'delivered'
+        //             });     
+        //         }
 
-            } else {
-                saveMessage = await createMessage({ ...data });
+        //     } else {
+        //         saveMessage = await createMessage({ ...data });
         
-                if (!saveMessage) {
-                    logger.error(messageConstants.MESSAGE_NOT_SENT);
-                    return;
-                }
+        //         if (!saveMessage) {
+        //             logger.error(messageConstants.MESSAGE_NOT_SENT);
+        //             return;
+        //         }
         
-                populatedMessage = await MessageSchema.findById(saveMessage._id).populate('attechment_id');
+        //         populatedMessage = await MessageSchema.findById(saveMessage._id).populate('attechment_id');
 
-                const attachmentDetails = populatedMessage && Array.isArray(populatedMessage.attechment_id)
-                ? populatedMessage.attechment_id.map(file => ({
-                    id: file._id,
-                    fileType: file.fileType,
-                    name: file.name,
-                    size: file.size,
-                    url: file.url
-                }))
-                : [];
+        //         const attachmentDetails = populatedMessage && Array.isArray(populatedMessage.attechment_id)
+        //         ? populatedMessage.attechment_id.map(file => ({
+        //             id: file._id,
+        //             fileType: file.fileType,
+        //             name: file.name,
+        //             size: file.size,
+        //             url: file.url
+        //         }))
+        //         : [];
 
-                const receiverSocketData = await SocketSchema.findOne({ user_id: data.receiver_id });
+        //         const receiverSocketData = await SocketSchema.findOne({ user_id: data.receiver_id });
 
-                // CREATE NOTIFICATION in DB
-            const notification = await NotificationSchema.create({
-                sender_id: data.sender_id,
-                receiver_id: data.receiver_id,
-                type: NotificationType.MESSAGE,  // new enum type
-                message: saveMessage.message || "New message",
-                reference_id: saveMessage._id,
-                reference_model: "Message",
+        //         // CREATE NOTIFICATION in DB
+        //     const notification = await NotificationSchema.create({
+        //         sender_id: data.sender_id,
+        //         receiver_id: data.receiver_id,
+        //         type: NotificationType.MESSAGE,  // new enum type
+        //         message: saveMessage.message || "New message",
+        //         reference_id: saveMessage._id,
+        //         reference_model: "Message",
+        //     });
+
+        //         if (receiverSocketData) {
+        //             const fullMessage = {
+        //                 ...saveMessage.toObject(),
+        //                 attechment_details: attachmentDetails
+        //             };
+                
+        //             io.to(receiverSocketData.socket_id).emit('chat_message', fullMessage);
+        //             io.to(receiverSocketData.socket_id).emit('new_message', fullMessage);
+
+        //             await MessageSchema.findByIdAndUpdate(saveMessage._id, {
+        //                 message_status: 'delivered'
+        //             });
+
+        //             io.to(receiverSocketData.socket_id).emit('receiveNotification', {
+        //             ...notification.toObject(),
+        //             attechment_details: attachmentDetails,
+        //         });
+    
+        //             // io.to(receiverSocketData.socket_id).emit('receiveNotification', {
+        //             //     type: 'message',
+        //             //     isGroup: false,
+        //             //     message: saveMessage.message,
+        //             //     senderId: data.sender_id,
+        //             //     createdAt: saveMessage.created_at,
+        //             //     message_type: saveMessage.message_type,
+        //             //     attechment_details: attachmentDetails,
+        //             //     latitude: saveMessage.latitude,
+        //             //     longitude: saveMessage.longitude,
+        //             // });
+
+        //             const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
+        //             if (senderSocketData) {
+        //                 io.to(senderSocketData.socket_id).emit('message_delivered', {
+        //                     _id: saveMessage._id,
+        //                     status: 'delivered'
+        //                 });
+        //             }
+        //         } else {
+        //             logger.error(messageConstants.RECEIVER_NOT_FOUND);
+        //         }
+
+        //          // -----------------------------
+        //     // EMAIL REMINDER LOGIC
+        //     // -----------------------------
+        //     setTimeout(async () => {
+        //         try {
+        //             // const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        //              const oneMinuteAgo = new Date(Date.now() - 60 * 1000); 
+
+        //             const unseenMessages = await MessageSchema.find({
+        //                 receiver_id: data.receiver_id,
+        //                 message_status: { $ne: MessageStatus.SEEN },
+        //                 createdAt: { $gte: oneMinuteAgo }
+        //             });
+
+        //             if (unseenMessages.length > 0) {
+        //                 const receiverUser = await User.findById(data.receiver_id);
+
+        //                 if (receiverUser && receiverUser.email) {
+        //                     const mailContent = {
+        //                         firstname: receiverUser.firstname || '',
+        //                         lastname: receiverUser.lastname || '',
+        //                         unseenCount: unseenMessages.length,
+        //                     };
+
+        //                     await mail.sendMailToUser(
+        //                         mailTemplateConstants.UNSEEN_MESSAGE_TEMPLATE,
+        //                         receiverUser.email,
+        //                         mailSubjectConstants.UNSEEN_MESSAGE_ALERT,
+        //                         mailContent
+        //                     );
+
+        //                     logger.info(`📧 Email sent to ${receiverUser.email} for ${unseenMessages.length} unseen messages`);
+        //                 }
+        //             }
+        //         } catch (error) {
+        //             logger.error("Error sending unseen message email", error);
+        //         }
+        //     // }, 60 * 60 * 1000); // 1 hour
+        //     }, 60 * 1000);  // 1 minute 
+        //     }
+        // });
+
+        async function scheduleEmailReminder(receiver_id) {
+    // If a timer already exists, do not create a new one
+    if (emailTimers.has(receiver_id)) return;
+
+    // Find the first unseen message
+    const firstUnseenMessage = await MessageSchema.findOne({
+        receiver_id,
+        message_status: { $ne: MessageStatus.SEEN }
+    }).sort({ created_at: 1 });
+
+    if (!firstUnseenMessage) return;
+
+    const firstMessageTime = firstUnseenMessage.created_at;
+    // const now = new Date();
+    const delay = Math.max(0, firstMessageTime.getTime() + 60 * 60 * 1000 - Date.now()); // 1 hour from first message
+
+    const timer = setTimeout(async () => {
+        try {
+            const unseenMessages = await MessageSchema.find({
+                receiver_id,
+                message_status: { $ne: MessageStatus.SEEN },
+                created_at: { $gte: firstMessageTime }
             });
 
-                if (receiverSocketData) {
-                    const fullMessage = {
-                        ...saveMessage.toObject(),
-                        attechment_details: attachmentDetails
+            if (unseenMessages.length > 0) {
+                const receiverUser = await User.findById(receiver_id);
+                if (receiverUser && receiverUser.email) {
+                    const mailContent = {
+                        firstname: receiverUser.firstname || '',
+                        lastname: receiverUser.lastname || '',
+                        unseenCount: unseenMessages.length,
                     };
-                
-                    io.to(receiverSocketData.socket_id).emit('chat_message', fullMessage);
-                    io.to(receiverSocketData.socket_id).emit('new_message', fullMessage);
 
-                    await MessageSchema.findByIdAndUpdate(saveMessage._id, {
-                        message_status: 'delivered'
-                    });
+                    await mail.sendMailToUser(
+                        mailTemplateConstants.UNSEEN_MESSAGE_TEMPLATE,
+                        receiverUser.email,
+                        mailSubjectConstants.UNSEEN_MESSAGE_ALERT,
+                        mailContent
+                    );
 
-                    io.to(receiverSocketData.socket_id).emit('receiveNotification', {
-                    ...notification.toObject(),
-                    attechment_details: attachmentDetails,
-                });
-    
-                    // io.to(receiverSocketData.socket_id).emit('receiveNotification', {
-                    //     type: 'message',
-                    //     isGroup: false,
-                    //     message: saveMessage.message,
-                    //     senderId: data.sender_id,
-                    //     createdAt: saveMessage.created_at,
-                    //     message_type: saveMessage.message_type,
-                    //     attechment_details: attachmentDetails,
-                    //     latitude: saveMessage.latitude,
-                    //     longitude: saveMessage.longitude,
-                    // });
-
-                    const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
-                    if (senderSocketData) {
-                        io.to(senderSocketData.socket_id).emit('message_delivered', {
-                            _id: saveMessage._id,
-                            status: 'delivered'
-                        });
-                    }
-                } else {
-                    logger.error(messageConstants.RECEIVER_NOT_FOUND);
+                    logger.info(`📧 Email sent to ${receiverUser.email} for ${unseenMessages.length} unseen messages`);
                 }
-
-                 // -----------------------------
-            // EMAIL REMINDER LOGIC
-            // -----------------------------
-            setTimeout(async () => {
-                try {
-                    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-
-                    const unseenMessages = await MessageSchema.find({
-                        receiver_id: data.receiver_id,
-                        message_status: { $ne: MessageStatus.SEEN },
-                        createdAt: { $gte: oneHourAgo }
-                    });
-
-                    if (unseenMessages.length > 0) {
-                        const receiverUser = await User.findById(data.receiver_id);
-
-                        if (receiverUser && receiverUser.email) {
-                            const mailContent = {
-                                firstname: receiverUser.firstname || '',
-                                lastname: receiverUser.lastname || '',
-                                unseenCount: unseenMessages.length,
-                            };
-
-                            await mail.sendMailToUser(
-                                mailTemplateConstants.UNSEEN_MESSAGE_TEMPLATE,
-                                receiverUser.email,
-                                mailSubjectConstants.UNSEEN_MESSAGE_ALERT,
-                                mailContent
-                            );
-
-                            logger.info(`📧 Email sent to ${receiverUser.email} for ${unseenMessages.length} unseen messages`);
-                        }
-                    }
-                } catch (error) {
-                    logger.error("Error sending unseen message email", error);
-                }
-            }, 60 * 60 * 1000); // 1 hour
             }
+        } catch (error) {
+            logger.error("Error sending unseen message email", error);
+        } finally {
+            // Remove timer after execution
+            emailTimers.delete(receiver_id);
+        }
+    }, delay);
+
+    emailTimers.set(receiver_id, timer);
+}
+
+socket.on('chat_message', async (data) => {
+    try {
+        if (data.replyTo) {
+            const repliedMessage = await MessageSchema.findById(data.reply_to);
+            if (!repliedMessage) {
+                logger.error(`ReplyTo message ID ${data.replyTo} not found`);
+                return;
+            }
+        }
+
+        // Save message
+        let saveMessage = await createMessage({ ...data });
+        if (!saveMessage) {
+            logger.error(messageConstants.MESSAGE_NOT_SENT);
+            return;
+        }
+
+        const populatedMessage = await MessageSchema.findById(saveMessage._id)
+            .populate('attechment_id');
+
+        const attachmentDetails =
+            populatedMessage && Array.isArray(populatedMessage.attechment_id)
+                ? populatedMessage.attechment_id.map(file => ({
+                    id: file._id,
+                    fileType: file.fileType,
+                    name: file.name,
+                    size: file.size,
+                    url: file.url
+                }))
+                : [];
+
+        const receiverSocketData = await SocketSchema.findOne({ user_id: data.receiver_id });
+
+        // CREATE NOTIFICATION in DB
+        const notification = await NotificationSchema.create({
+            sender_id: data.sender_id,
+            receiver_id: data.receiver_id,
+            type: NotificationType.MESSAGE,
+            message: saveMessage.message || "New message",
+            reference_id: saveMessage._id,
+            reference_model: "Message",
         });
+
+        // Send message to receiver
+        if (receiverSocketData) {
+            const fullMessage = {
+                ...saveMessage.toObject(),
+                attechment_details: attachmentDetails
+            };
+
+            io.to(receiverSocketData.socket_id).emit('chat_message', fullMessage);
+            io.to(receiverSocketData.socket_id).emit('new_message', fullMessage);
+
+            await MessageSchema.findByIdAndUpdate(saveMessage._id, {
+                message_status: 'delivered'
+            });
+
+            io.to(receiverSocketData.socket_id).emit('receiveNotification', {
+                ...notification.toObject(),
+                attechment_details: attachmentDetails,
+            });
+
+            const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
+            if (senderSocketData) {
+                io.to(senderSocketData.socket_id).emit('message_delivered', {
+                    _id: saveMessage._id,
+                    status: 'delivered'
+                });
+            }
+        } else {
+            logger.error(messageConstants.RECEIVER_NOT_FOUND);
+        }
+
+        // Schedule email reminder for this receiver
+        await scheduleEmailReminder(data.receiver_id);
+
+    } catch (error) {
+        logger.error("Error handling chat_message", error);
+    }
+});
+
+
+
+//         // Create a message (direct or group)
+// socket.on('chat_message', async (data) => {
+//     try {
+//         if (data.replyTo) {
+//             const repliedMessage = await MessageSchema.findById(data.reply_to);
+//             if (!repliedMessage) {
+//                 logger.error(`ReplyTo message ID ${data.replyTo} not found`);
+//                 return;
+//             }
+//         }
+
+//         let saveMessage = await createMessage({ ...data });
+//         if (!saveMessage) {
+//             logger.error(messageConstants.MESSAGE_NOT_SENT);
+//             return;
+//         }
+
+//         const populatedMessage = await MessageSchema.findById(saveMessage._id)
+//             .populate('attechment_id');
+
+//         const attachmentDetails =
+//             populatedMessage && Array.isArray(populatedMessage.attechment_id)
+//                 ? populatedMessage.attechment_id.map(file => ({
+//                     id: file._id,
+//                     fileType: file.fileType,
+//                     name: file.name,
+//                     size: file.size,
+//                     url: file.url
+//                 }))
+//                 : [];
+
+//         const receiverSocketData = await SocketSchema.findOne({ user_id: data.receiver_id });
+
+//         // CREATE NOTIFICATION in DB
+//         const notification = await NotificationSchema.create({
+//             sender_id: data.sender_id,
+//             receiver_id: data.receiver_id,
+//             type: NotificationType.MESSAGE,
+//             message: saveMessage.message || "New message",
+//             reference_id: saveMessage._id,
+//             reference_model: "Message",
+//         });
+
+//         if (receiverSocketData) {
+//             const fullMessage = {
+//                 ...saveMessage.toObject(),
+//                 attechment_details: attachmentDetails
+//             };
+
+//             io.to(receiverSocketData.socket_id).emit('chat_message', fullMessage);
+//             io.to(receiverSocketData.socket_id).emit('new_message', fullMessage);
+
+//             await MessageSchema.findByIdAndUpdate(saveMessage._id, {
+//                 message_status: 'delivered'
+//             });
+
+//             io.to(receiverSocketData.socket_id).emit('receiveNotification', {
+//                 ...notification.toObject(),
+//                 attechment_details: attachmentDetails,
+//             });
+
+//             const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
+//             if (senderSocketData) {
+//                 io.to(senderSocketData.socket_id).emit('message_delivered', {
+//                     _id: saveMessage._id,
+//                     status: 'delivered'
+//                 });
+//             }
+//         } else {
+//             logger.error(messageConstants.RECEIVER_NOT_FOUND);
+//         }
+
+//         // -----------------------------
+//         // EMAIL REMINDER LOGIC (send immediately for testing)
+//         // -----------------------------
+//         const unseenMessages = await MessageSchema.find({
+//             receiver_id: data.receiver_id,
+//             message_status: { $ne: MessageStatus.SEEN }
+//         });
+
+//         if (unseenMessages.length > 0) {
+//             const receiverUser = await User.findById(data.receiver_id);
+
+//             if (receiverUser && receiverUser.email) {
+//                 const mailContent = {
+//                     firstname: receiverUser.firstname || '',
+//                     lastname: receiverUser.lastname || '',
+//                     unseenCount: unseenMessages.length,
+//                 };
+
+//                 await mail.sendMailToUser(
+//                     mailTemplateConstants.UNSEEN_MESSAGE_TEMPLATE,
+//                     receiverUser.email,
+//                     mailSubjectConstants.UNSEEN_MESSAGE_ALERT,
+//                     mailContent
+//                 );
+
+//                 logger.info(`📧 Email sent to ${receiverUser.email} for ${unseenMessages.length} unseen messages`);
+//             }
+//         }
+//     } catch (error) {
+//         logger.error("Error handling chat_message", error);
+//     }
+// });
+
 
         socket.on('update_message', async (data) => {
             try {
@@ -460,6 +706,16 @@ module.exports = (io) => {
                         seen_by: user_id
                     });
                 }
+
+                 const unseenMessages = await Model.find({
+            receiver_id: message.receiver_id,
+            message_status: { $ne: MessageStatus.SEEN }
+        });
+
+        if (unseenMessages.length === 0 && emailTimers.has(message.receiver_id)) {
+            clearTimeout(emailTimers.get(message.receiver_id));
+            emailTimers.delete(message.receiver_id);
+        }
             }
         });    
     })

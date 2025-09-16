@@ -386,7 +386,7 @@ module.exports = (io) => {
 
     const firstMessageTime = firstUnseenMessage.created_at;
     // const now = new Date();
-    const delay = Math.max(0, firstMessageTime.getTime() + 60 * 60 * 1000 - Date.now()); // 1 hour from first message
+    const delay = Math.max(0, firstMessageTime.getTime() + 60 * 60 * 1000 - Date.now()); 
 
     const timer = setTimeout(async () => {
         try {

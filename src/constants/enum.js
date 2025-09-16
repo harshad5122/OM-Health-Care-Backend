@@ -50,16 +50,28 @@ const defaultWeeklySchedule = Object.values(WeekDays).map(day => ({
     ]
 }));
 
+const leaveTypes = Object.freeze({
+    FULL_DAY: "FULL_DAY",
+    FIRST_HALF: "FIRST_HALF",
+    SECOND_HALF: "SECOND_HALF",
+});
+
 const NotificationType = Object.freeze({
     APPOINTMENT_REQUEST: "APPOINTMENT_REQUEST",
     APPOINTMENT_CONFIRMED: "APPOINTMENT_CONFIRMED",
     APPOINTMENT_CANCELLED: "APPOINTMENT_CANCELLED",
     MESSAGE: "MESSAGE",
     SYSTEM: "SYSTEM",
-    LEAVE_REQUEST:"LEAVE_REQUEST",
-    LEAVE_CONFIRMED:"LEAVE_CONFIRMED",
-    LEAVE_CANCELLED:"LEAVE_CANCELLED"
+    LEAVE_REQUEST: "LEAVE_REQUEST",
+    LEAVE_CONFIRMED: "LEAVE_CONFIRMED",
+    LEAVE_CANCELLED: "LEAVE_CANCELLED"
 })
+
+const leaveTypeTimes = {
+    FULL_DAY: { start: "00:00", end: "23:00" },
+    FIRST_HALF: { start: "08:00", end: "14:00" },
+    SECOND_HALF: { start: "14:00", end: "20:00" },
+};
 
 module.exports = {
     UserRole,
@@ -70,5 +82,7 @@ module.exports = {
     AppointmentStatus,
     defaultWeeklySchedule,
     NotificationType,
-    leaveStatus
+    leaveStatus,
+    leaveTypes,
+    leaveTypeTimes
 }

@@ -1,5 +1,5 @@
 const { UserRole } = require('../../constants');
-const { AppointmentStatus, NotificationType } = require('../../constants/enum');
+const { AppointmentStatus, NotificationType, leaveTypeTimes } = require('../../constants/enum');
 const AppointmentSchema = require('../../models/appointment');
 const WeeklyScheduleSchema = require('../../models/weekly_schedule_pattern');
 const UserSchema = require('../../models/user');
@@ -34,7 +34,7 @@ const createAppointment = async (req, res) => {
                 sender_id: patient_id,
                 receiver_id: user?._id,
                 type: NotificationType.APPOINTMENT_REQUEST,
-                message: `New appointment request from patient ${patient_name} on ${date} (${time_slot})`,
+                message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
                 reference_id: appointment._id,
                 reference_model: "Appointment",
                 read: false
@@ -105,27 +105,27 @@ const mergeIntervals = (intervals) => {
 };
 function mergeSlots(slots) {
     slots.sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
-  
+
     const merged = [];
     let current = slots[0];
-  
+
     for (let i = 1; i < slots.length; i++) {
-      const next = slots[i];
-      if (toMinutes(next.start) <= toMinutes(current.end)) {
-        // overlapping or continuous → merge
-        current.end = next.end > current.end ? next.end : current.end;
-      } else {
-        merged.push(current);
-        current = next;
-      }
+        const next = slots[i];
+        if (toMinutes(next.start) <= toMinutes(current.end)) {
+            // overlapping or continuous → merge
+            current.end = next.end > current.end ? next.end : current.end;
+        } else {
+            merged.push(current);
+            current = next;
+        }
     }
     merged.push(current);
     return merged;
-  }
-  
-  
+}
 
-  
+
+
+
 
 // Subtract booked intervals from schedule
 const subtractIntervals = (schedule, booked) => {
@@ -222,21 +222,51 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
                 current.add(1, "day");
             }
 
+
             // Mark leaves that fall in range
+            const leaveIntervals = [];
             leaves.forEach((leave) => {
-                const leaveStart = moment(leave.start).startOf("day");
-                const leaveEnd = moment(leave.end).endOf("day");
+                const leaveStart = moment(leave.start_date).startOf("day");
+                const leaveEnd = moment(leave.end_date).endOf("day");
                 Object.keys(dayStatus).forEach((dateStr) => {
                     const d = moment(dateStr, "YYYY-MM-DD");
                     if (d.isBetween(leaveStart, leaveEnd, null, "[]")) {
                         dayStatus[dateStr].status = "leave";
-                        dayStatus[dateStr].events.push({
-                            title: "Doctor on Leave",
-                            start: d.startOf("day").toDate(),
-                            end: d.endOf("day").toDate(),
-                            type: "leave",
 
-                        });
+                        if (moment(d).isBetween(leaveStart, leaveEnd, null, "[]")) {
+                            let startTime, endTime;
+
+                            if (leave.leave_type === "CUSTOM") {
+                                startTime = leave.start_time || "00:00";
+                                endTime = leave.end_time || "23:59";
+                            } else {
+                                const times = leaveTypeTimes[leave.leave_type] || leaveTypeTimes.FULL_DAY;
+                                startTime = times.start;
+                                endTime = times.end;
+                            }
+
+                            leaveIntervals.push([toMinutes(startTime), toMinutes(endTime)]);
+
+
+
+                            dayStatus[dateStr].events.push({
+                                title: "Doctor on Leave",
+                                start_date: leave.start_date,
+                                end_date: leave.start_date,
+                                start: startTime,
+                                end: endTime,
+                                full_day: leave.full_day,
+                                status: leave?.status,
+                                type: "leave",
+
+                            });
+                        }
+                        // dayStatus[dateStr].slots = {
+                        //     available: [],
+                        //     booked: [], // 👈 pass flag to preserve id
+                        // };
+
+
                     }
                 });
             });
@@ -276,7 +306,7 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
             // }
             if (weeklySchedule) {
                 Object.keys(dayStatus).forEach((dateStr) => {
-                    if (dayStatus[dateStr].status === "leave") return;
+                    // if (dayStatus[dateStr].status === "leave") return;
 
                     const dayOfWeek = moment(dateStr).format("dddd").toUpperCase(); // e.g. "MONDAY"
 
@@ -325,6 +355,14 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
                             start: toMinutes(e.start),
                             end: toMinutes(e.end),
                         }));
+
+                    const leaves = dayStatus[dateStr].events
+                        .filter(e => e.type === "leave")
+                        .map(e => ({
+                            id: e.id || null,
+                            start: toMinutes(e.start),
+                            end: toMinutes(e.end),
+                        }));
                     // Merge only time ranges, but keep mapping back ids
                     const mergedBooked = mergeIntervals(
                         booked.map(b => [b.start, b.end])
@@ -338,19 +376,27 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
                             id: overlappingIds.length === 1 ? overlappingIds[0] : overlappingIds, // array if merged
                             start: interval[0],
                             end: interval[1],
+
                         };
                     });
 
                     const scheduleIntervals = normalizeSchedule(slots);
 
+                    const unavailable = [
+                        ...mergedBooked.map(b => [b.start, b.end]),
+                        ...leaves.map(l => [l.start, l.end])
+                    ];
+
                     const available = subtractIntervals(
                         scheduleIntervals,
-                        mergedBooked.map(b => [b.start, b.end])
+                        // mergedBooked.map(b => [b.start, b.end])
+                        unavailable
                     );
 
                     dayStatus[dateStr].slots = {
                         available: formatSlots(available),
-                        booked: formatSlots(mergedBooked?.map(e => [e?.start, e?.end, e?.id]), true), // 👈 pass flag to preserve id
+                        booked: formatSlots(mergedBooked?.map(e => [e?.start, e?.end, e?.id]), true),
+                        leave: formatSlots(leaves.map(l => [l.start, l.end, l.id || null])),
                     };
 
 
@@ -988,7 +1034,7 @@ const updateAppointment = async (req, res) => {
             //     });
             // }
 
-            const user = await UserSchema?.findOne({ staff_id:appointment?.staff_id });
+            const user = await UserSchema?.findOne({ staff_id: appointment?.staff_id });
             const notification = await NotificationSchema.create({
                 sender_id: patient_id,
                 receiver_id: user?._id,

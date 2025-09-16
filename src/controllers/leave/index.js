@@ -1,4 +1,6 @@
-const  leaveServise = require('../../services/leave')
+const { messageConstants } = require('../../constants');
+const leaveServise = require('../../services/leave');
+const { logger } = require('../../utils');
 
 const createLeave = async (req, res) => {
     try {
@@ -12,24 +14,24 @@ const createLeave = async (req, res) => {
     }
 }
 
-const getLeaveByDoctor = async (req,res) =>{
-    try{
-const response = await leaveServise?.getLeavesByProvider(req,res)
-logger.info(`${messageConstants.RESPONSE_FROM} get leave`, JSON.stringify(response));
-res.send(response);
+const getLeaveByDoctor = async (req, res) => {
+    try {
+        const response = await leaveServise?.getLeavesByProvider(req, res)
+        logger.info(`${messageConstants.RESPONSE_FROM} get leave`, JSON.stringify(response));
+        res.send(response);
 
-    }catch(err){
+    } catch (err) {
         logger.error(`get leave ${messageConstants.API_FAILED}`, err);
         res.send(err);
     }
 }
-const updateLeaveStatus = async (req,res) =>{
-    try{
-const response = await leaveServise?.updateLeaveStatus(req,res)
-logger.info(`${messageConstants.RESPONSE_FROM} update leave`, JSON.stringify(response));
-res.send(response);
+const updateLeaveStatus = async (req, res) => {
+    try {
+        const response = await leaveServise?.updateLeaveStatus(req, res)
+        logger.info(`${messageConstants.RESPONSE_FROM} update leave`, JSON.stringify(response));
+        res.send(response);
 
-    }catch(err){
+    } catch (err) {
         logger.error(`update leave ${messageConstants.API_FAILED}`, err);
         res.send(err);
     }

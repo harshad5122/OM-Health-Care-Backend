@@ -22,6 +22,17 @@ const getAppontmentByDoctor = async (req, res) => {
         res.send(err);
     }
 }
+const getAppointmentList = async (req, res) => {
+    try {
+        const response = await appointmentService?.getAppointmentList(req, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} get appointment API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`Get Appointment ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
 
 const getPatients = async (req, res) => {
     try {
@@ -59,5 +70,6 @@ module.exports = {
     getAppontmentByDoctor,
     getPatients,
     updateAppointmentStatus,
-    updateAppointment
+    updateAppointment,
+    getAppointmentList
 }

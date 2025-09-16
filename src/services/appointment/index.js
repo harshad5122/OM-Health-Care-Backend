@@ -806,6 +806,46 @@ const getAppontmentByDoctor = async (req, res) => {
     })
 
 }
+const getAppointmentList = async(req,res)=>{
+      return new Promise(async () => {
+
+        try {
+            // const doctorId = req.params._id;
+            // const { from, to } = req.query;
+            const doctorId = req.params._id;
+            const { from, to, status } = req.query;
+            const query = { staff_id: doctorId };
+            if (status) {
+                const statusArray = status.split(",").map(s => s.trim()); 
+                if (statusArray.length === 1) {
+                query.status = statusArray[0]; 
+                } else {
+                query.status = { $in: statusArray }; 
+                }
+            }
+            let startDate, endDate;
+            const hasRange = from && to;
+            if (hasRange) {
+            startDate = moment(from).startOf("day");
+            endDate = moment(to).endOf("day");
+
+            if (!startDate.isValid() || !endDate.isValid()) {
+                return responseData.fail(res, "Invalid from/to dates", 400);
+            }
+
+            query.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
+            }
+            const result = await AppointmentSchema.find(query).lean();
+            // const result = await AppointmentSchema.find({ staff_id: doctorId}).lean();
+            return responseData.success(res, result, messageConstants.FETCHED_SUCCESSFULLY);
+           
+        } catch (error) {
+            console.error("getAppointmentByDoctor error:", error);
+            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+        }
+
+    })
+}
 
 const getPatients = async (req, res) => {
     return new Promise(async () => {
@@ -1077,5 +1117,6 @@ module.exports = {
     getAppontmentByDoctor,
     getPatients,
     updateAppointmentStatus,
-    updateAppointment
+    updateAppointment,
+    getAppointmentList
 }

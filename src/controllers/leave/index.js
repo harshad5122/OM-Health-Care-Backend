@@ -37,8 +37,33 @@ const updateLeaveStatus = async (req, res) => {
     }
 }
 
+const updateLeave  = async (req, res) => {
+    try {
+        const response = await leaveServise?.updateLeave (req, res)
+        logger.info(`${messageConstants.RESPONSE_FROM} update leave`, JSON.stringify(response));
+        res.send(response);
+
+    } catch (err) {
+        logger.error(`update leave ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
+const deleteLeave  = async (req, res) => {
+    try {
+        const response = await leaveServise?.deleteLeave (req, res)
+        logger.info(`${messageConstants.RESPONSE_FROM} delete leave`, JSON.stringify(response));
+        res.send(response);
+
+    } catch (err) {
+        logger.error(`delete leave ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
 module.exports = {
     createLeave,
     getLeaveByDoctor,
-    updateLeaveStatus
+    updateLeaveStatus,
+    updateLeave,
+    deleteLeave 
 }

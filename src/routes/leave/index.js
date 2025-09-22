@@ -7,5 +7,7 @@ module.exports = (app) => {
     app.get(urlConstants.GET_LEAVE_BY_DOCTOR, jsonWebToken.validateToken,leaveController?.getLeaveByDoctor)
     
     app.put(urlConstants.UPDATE_LEAVE_STATUS, jsonWebToken.validateToken,leaveController?.updateLeaveStatus)
+    app.put(urlConstants.UPDATE_LEAVE, jsonWebToken.validateToken, leaveController?.updateLeave);
+    app.delete(urlConstants.DELETE_LEAVE, jsonWebToken.validateToken, leaveController?.deleteLeave);
     
 }

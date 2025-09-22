@@ -257,8 +257,85 @@ const updateLeaveStatus = async (req, res) => {
   })
 }
 
+const updateLeave = async (req, res) => {
+  return new Promise(async () => {
+    try {
+      const { _id } = req.params;
+      const { start_date, end_date, leave_type, reason } = req.body;
+
+      if (!_id) {
+        return responseData.fail(res, "Leave ID is required", 400);
+      }
+
+      const leave = await StaffLeaveSchema.findById(_id);
+      if (!leave) {
+        return responseData.fail(res, "Leave not found", 404);
+      }
+
+      // Normalize new dates if provided
+      let startDate = leave.start_date;
+      let endDate = leave.end_date;
+
+      if (start_date) startDate = dayjs(start_date).startOf("day").toDate();
+      if (end_date) endDate = dayjs(end_date).endOf("day").toDate();
+
+      if (dayjs(endDate).isBefore(startDate)) {
+        return responseData.fail(res, "End date cannot be earlier than start date.", 400);
+      }
+
+      // Update fields
+      leave.start_date = startDate;
+      leave.end_date = endDate;
+      leave.leave_type = leave_type || leave.leave_type;
+      leave.reason = reason || leave.reason;
+
+      await leave.save();
+
+      logger.info("Leave updated successfully", { leave: leave?._id });
+      return responseData.success(res, leave, messageConstants.DATA_UPDATED_SUCCESSFULLY);
+
+    } catch (error) {
+      console.error("updateLeave error:", error);
+      logger.error("Update leave " + messageConstants.INTERNAL_SERVER_ERROR, error);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+  });
+};
+
+const deleteLeave = async (req, res) => {
+  return new Promise(async () => {
+    try {
+      const { _id } = req.params;
+
+      if (!_id) {
+        return responseData.fail(res, "Leave ID is required", 400);
+      }
+
+      const leave = await StaffLeaveSchema.findById(_id);
+      if (!leave) {
+        return responseData.fail(res, "Leave not found", 404);
+      }
+
+      await StaffLeaveSchema.findByIdAndDelete(_id);
+
+      // Optionally delete related notifications
+      await NotificationSchema.deleteMany({ reference_id: _id, reference_model: "StaffLeave" });
+
+      logger.info("Leave deleted successfully", { leaveId: _id });
+      return responseData.success(res, {}, messageConstants.DATA_DELETED_SUCCESSFULLY);
+
+    } catch (error) {
+      console.error("deleteLeave error:", error);
+      logger.error("Delete leave " + messageConstants.INTERNAL_SERVER_ERROR, error);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+  });
+};
+
 module.exports = {
   createLeave,
   getLeavesByProvider,
-  updateLeaveStatus
+  updateLeaveStatus,
+  updateLeave,
+  deleteLeave
 }

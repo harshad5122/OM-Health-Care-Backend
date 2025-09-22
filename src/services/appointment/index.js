@@ -43,6 +43,7 @@ const createAppointment = async (req, res) => {
 
             const doctorSocket = await SocketSchema.findOne({ user_id: user._id });
 
+            if (doctorSocket && doctorSocket.socket_id) {
             io.to(`${doctorSocket.socket_id}`).emit("appointmentRequest", {
                 _id: notification?._id,
                 sender_id: patient_id,
@@ -53,6 +54,9 @@ const createAppointment = async (req, res) => {
                 reference_model: "Appointment",
                 read: false
             });
+            } else {
+            console.warn(` Doctor ${user?._id} not connected to socket. Notification saved to DB only.`);
+}
 
 
             logger.info(

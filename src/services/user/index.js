@@ -221,7 +221,7 @@ const getUserList = async (req, user, res) => {
                 UserSchema.countDocuments(match)
             ]);
 
-            if (rows.length > 0) {
+            if (rows.length >= 0) {
                 return responseData.success(
                     res,
                     (skip != null && limit != null)

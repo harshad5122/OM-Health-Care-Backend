@@ -62,10 +62,13 @@ const getBroadcastList = async (req, res) => {
     try {
         const response = await messageService.getBroadcastList(req, req?.userDetails, res);
         logger.info(`${messageConstants.RESPONSE_FROM} get broadcast list API`, JSON.stringify(response));
-        res.send(response);
+        // res.send(response);
     } catch (err) {
         logger.error(`Get broadcast list ${messageConstants.API_FAILED}`, err);
-        res.send(err);
+        // res.send(err);
+         if (!res.headersSent) {
+            res.status(500).send({ msg: "An error occurred" });
+        }
     }
 }
 

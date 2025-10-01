@@ -3,7 +3,7 @@ const { UserTypes } = require('../constants');
 
 const userSchema = mongoose.Schema({
     firstname: {
-        type: String,
+        type: String,   
         required: true
     },
     lastname: {

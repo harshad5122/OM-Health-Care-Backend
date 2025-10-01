@@ -8,4 +8,7 @@ module.exports = (app) => {
     app.get(urlConstants.MESSAGE_LIST, jsonWebToken.validateToken, messageController.getMessageList);
     app.get(urlConstants.CHAT_LIST, jsonWebToken.validateToken, messageController.getChatList);
     app.get(urlConstants.GROUP_MESSAGE_LIST, jsonWebToken.validateToken, messageController.getGroupMessageList);
+    app.get(urlConstants.GET_BROADCASTS, jsonWebToken.validateToken, messageController.getBroadcastList);
+    app.get(urlConstants.GET_BROADCAST_RECIPIENTS, jsonWebToken.validateToken, messageController.getBroadcastRecipients);
+
 }

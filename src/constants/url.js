@@ -15,6 +15,8 @@ const urlConstants = {
     MESSAGE_LIST: '/message/list',
     CHAT_LIST: '/chat/list',
     GROUP_MESSAGE_LIST: '/gruop-message/list',
+    GET_BROADCASTS: '/broadcasts',
+    GET_BROADCAST_RECIPIENTS: '/broadcasts/recipients/:id',
 
     // UPLOAD_FILE ROUTES
     UPLOAD_FILE: '/file/upload',

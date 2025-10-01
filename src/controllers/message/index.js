@@ -58,10 +58,36 @@ const getGroupMessageList = async (req, res) => {
 }
 
 
+const getBroadcastList = async (req, res) => {
+    try {
+        const response = await messageService.getBroadcastList(req, req?.userDetails, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} get broadcast list API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`Get broadcast list ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
+const getBroadcastRecipients = async (req, res) => {
+  try {
+    const response = await messageService.getBroadcastRecipients(req, req?.userDetails, res);
+    logger.info(`${messageConstants.RESPONSE_FROM} get broadcast recipients API`, JSON.stringify(response));
+    res.send(response);
+  } catch (err) {
+    logger.error(`Get broadcast recipients ${messageConstants.API_FAILED}`, err);
+    res.send(err);
+  }
+};
+
+
+
 module.exports = {
     // sendMessage,
     // getMessage,
     getMessageList,
     getChatList,
     getGroupMessageList,
+    getBroadcastList,
+    getBroadcastRecipients
 }

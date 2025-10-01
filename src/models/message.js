@@ -16,6 +16,11 @@ const MessageSchema = new mongoose.Schema({
         // required: true 
     },
 
+    broadcast_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "broadcast",
+  },
+
     message: { 
         type: String, 
        // required: true 
@@ -48,6 +53,11 @@ const MessageSchema = new mongoose.Schema({
     reply_to: { 
         type: mongoose.Schema.Types.ObjectId,
          ref: 'message' 
+    },
+
+      edited: {
+        type: Boolean,
+        default: false
     },
 
     message_status: {

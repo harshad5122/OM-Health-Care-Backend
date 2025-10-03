@@ -76,7 +76,7 @@ const getBroadcastRecipients = async (req, res) => {
   try {
     const response = await messageService.getBroadcastRecipients(req, req?.userDetails, res);
     logger.info(`${messageConstants.RESPONSE_FROM} get broadcast recipients API`, JSON.stringify(response));
-    res.send(response);
+    // res.send(response);
   } catch (err) {
     logger.error(`Get broadcast recipients ${messageConstants.API_FAILED}`, err);
     res.send(err);

@@ -990,7 +990,7 @@ const updateAppointmentStatus = async (req, res) => {
 const updateAppointment = async (req, res) => {
     return new Promise(async () => {
         try {
-            const { reference_id, date, time_slot, visit_type, patient_id } = req.body;
+            const { reference_id, date, time_slot, visit_type, patient_id, patient_name } = req.body;
             const actorId = req.userDetails?._id;
 
             // 1. Validate input

@@ -2,6 +2,7 @@
 
 const UserSchema = require('../../models/user');
 const MessageSchema = require('../../models/message');
+const StaffSchema = require('../../models/staff')
 const { responseData, messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../../constants');
 const { logger, mail } = require('../../utils');
 const { UserTypes, MessageStatus } = require('../../constants/enum');
@@ -273,6 +274,7 @@ const updateUserProfile = async (req, userDetails, res) => {
     return new Promise(async () => {
         try {
             const userId = userDetails?._id;
+             const role = userDetails?.role;
             if (!userId) {
                 logger.error("User ID not found in token");
                 return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
@@ -281,6 +283,7 @@ const updateUserProfile = async (req, userDetails, res) => {
             const updateData = { ...req.body, updated_at: new Date() };
 
             // prevent changing role, password directly from here
+            delete updateData._id;
             delete updateData.password;
             delete updateData.role;
             delete updateData.is_deleted;
@@ -291,6 +294,15 @@ const updateUserProfile = async (req, userDetails, res) => {
                 { $set: updateData },
                 { new: true, runValidators: true }
             ).select("-password -__v -token -is_deleted");
+
+            let updatedStaff = null;
+           if (role === 3 && userDetails?.staff_id) {
+            updatedStaff = await StaffSchema.findByIdAndUpdate(
+                userDetails.staff_id,
+                { $set: updateData },
+                { new: true, runValidators: true }
+            ).select("-__v -is_deleted");
+            }
 
             if (!updatedUser) {
                 logger.error(`User not found with id: ${userId}`);

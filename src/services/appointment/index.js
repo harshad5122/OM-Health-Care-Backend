@@ -290,7 +290,9 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
                     status: appt?.status,
                     id: appt?._id,
                     visit_type: appt?.visit_type,
-                    patient_id: appt?.patient_id
+                    patient_id: appt?.patient_id,
+                    creator:appt?.creator,
+                    created_by:appt?.created_by
                 });
                 if (dayStatus[dateStr].status !== "leave") {
                     dayStatus[dateStr].status = "available";
@@ -429,7 +431,10 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
                     status: appt?.status,
                     id: appt?._id,
                     visit_type: appt?.visit_type,
-                    patient_id: appt?.patient_id
+                    patient_id: appt?.patient_id,
+                    creator:appt?.creator,
+                    created_by:appt?.created_by
+
                 });
                 if (dayStatus[dateStr].status !== "leave") {
                     dayStatus[dateStr].status = "available";
@@ -839,7 +844,7 @@ const getAppointmentList = async(req,res)=>{
 
             query.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
             }
-            const result = await AppointmentSchema.find(query).lean();
+            const result = await AppointmentSchema.find(query).sort({ createdAt: -1 }).lean();
             // const result = await AppointmentSchema.find({ staff_id: doctorId}).lean();
             return responseData.success(res, result, messageConstants.FETCHED_SUCCESSFULLY);
            

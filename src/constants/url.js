@@ -60,7 +60,7 @@ const urlConstants = {
 
     CREATE_LEAVE:'/create-leave',
     GET_LEAVE_BY_DOCTOR:'/get-leave/:_id',
-    UPDATE_LEAVE_STATUS:'/update-leave',
+    UPDATE_LEAVE_STATUS:'/update-leave-status',
     UPDATE_LEAVE: '/update-leave/:_id',
     DELETE_LEAVE: '/delete-leave/:_id',
 

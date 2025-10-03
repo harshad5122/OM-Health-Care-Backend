@@ -123,7 +123,7 @@ const getLeavesByProvider = async (req, res) => {
       }
 
       const leaves = await StaffLeaveSchema.find(query)
-        .sort({ start_date: 1 })
+        .sort({ createdAt: -1 })
         .lean();
 
       return responseData.success(

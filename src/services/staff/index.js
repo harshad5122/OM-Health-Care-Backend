@@ -153,7 +153,7 @@ const getDoctor = async (req, userDetails, res) => {
                   dob: {
                     $cond: {
                       if: { $ifNull: ["$dob", false] },
-                      then: { $dateToString: { format: "%m/%d/%Y", date: "$dob" } },
+                      then: { $dateToString: { format: "%d/%m/%Y", date: "$dob" } },
                       else: null
                     }
                   },

@@ -30,11 +30,24 @@ const createAppointment = async (req, res) => {
             const appointment = await AppointmentSchema?.create({ ...payload });
             const user = await UserSchema?.findOne({ staff_id });
 
+            const appointmentDate = new Date(date);
+            const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
+            const formatTimeTo12Hour = (timeString) => {
+                const [hours, minutes] = timeString.split(':');
+                const hour = parseInt(hours);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const twelveHour = hour % 12 || 12;
+                return `${twelveHour}:${minutes} ${ampm}`;
+            };
+            const formattedStartTime = formatTimeTo12Hour(time_slot?.start);
+            const formattedEndTime = formatTimeTo12Hour(time_slot?.end);
+
             const notification = await NotificationSchema.create({
                 sender_id: patient_id,
                 receiver_id: user?._id,
                 type: NotificationType.APPOINTMENT_REQUEST,
-                message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+                // message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+                message: `New appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
                 reference_id: appointment._id,
                 reference_model: "Appointment",
                 read: false
@@ -49,7 +62,8 @@ const createAppointment = async (req, res) => {
                 sender_id: patient_id,
                 receiver_id: user?._id,
                 type: NotificationType.APPOINTMENT_REQUEST,
-                message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+                // message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+                message: `New appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
                 reference_id: appointment._id,
                 reference_model: "Appointment",
                 read: false
@@ -928,9 +942,23 @@ const updateAppointmentStatus = async (req, res) => {
                 ? (NotificationType?.APPOINTMENT_CONFIRMED || "APPOINTMENT_CONFIRMED")
                 : (NotificationType?.APPOINTMENT_CANCELLED || NotificationType?.APPOINTMENT_DECLINED || "APPOINTMENT_CANCELLED");
 
+            const appointmentDate = new Date(appointment.date);
+            const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
+            const formatTimeTo12Hour = (timeString) => {
+                const [hours, minutes] = timeString.split(':');
+                const hour = parseInt(hours);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const twelveHour = hour % 12 || 12;
+                return `${twelveHour}:${minutes} ${ampm}`;
+            };
+            const formattedStartTime = formatTimeTo12Hour(appointment.time_slot?.start);
+            const formattedEndTime = formatTimeTo12Hour(appointment.time_slot?.end);
             const defaultMsg = status === AppointmentStatus.CONFIRMED
-                ? `Your appointment on ${appointment.date.toDateString()} (${appointment.time_slot?.start || ""} - ${appointment.time_slot?.end || ""}) has been confirmed.`
-                : `Your appointment on ${appointment.date.toDateString()} (${appointment.time_slot?.start || ""} - ${appointment.time_slot?.end || ""}) has been declined.`;
+                ? `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`
+                : `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been declined.`;
+            // const defaultMsg = status === AppointmentStatus.CONFIRMED
+            //     ? `Your appointment on ${appointment.date.toDateString()} (${appointment.time_slot?.start || ""} - ${appointment.time_slot?.end || ""}) has been confirmed.`
+            //     : `Your appointment on ${appointment.date.toDateString()} (${appointment.time_slot?.start || ""} - ${appointment.time_slot?.end || ""}) has been declined.`;
 
             // 7. create notifications (one per user) and emit via socket if online
             const createdNotifications = [];
@@ -1083,6 +1111,17 @@ const updateAppointment = async (req, res) => {
             //     });
             // }
 
+            const appointmentDate = new Date(date);
+            const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
+            const formatTimeTo12Hour = (timeString) => {
+                const [hours, minutes] = timeString.split(':');
+                const hour = parseInt(hours);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const twelveHour = hour % 12 || 12;
+                return `${twelveHour}:${minutes} ${ampm}`;
+            };
+            const formattedStartTime = formatTimeTo12Hour(time_slot?.start);
+            const formattedEndTime = formatTimeTo12Hour(time_slot?.end);
             const user = await UserSchema?.findOne({ staff_id: appointment?.staff_id });
             const notification = await NotificationSchema.create({
                 sender_id: patient_id,
@@ -1102,7 +1141,8 @@ const updateAppointment = async (req, res) => {
                 sender_id: patient_id,
                 receiver_id: user?._id,
                 type: NotificationType.APPOINTMENT_REQUEST,
-                message: `Appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+                // message: `Appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+                message: `Appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
                 reference_id: appointment._id,
                 reference_model: "Appointment",
                 read: false

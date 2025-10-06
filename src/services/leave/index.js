@@ -13,7 +13,7 @@ const { logger } = require('../../utils');
 const createLeave = async (req, res) => {
   return new Promise(async () => {
     try {
-      const { staff_id, staff_name, start_date, end_date, leave_type, start_time, end_time, reason } = req.body;
+      const { staff_id, staff_name, start_date, end_date, leave_type, start_time, end_time, reason,admin_id,admin_name} = req.body;
 
       if (!staff_id || !start_date || !end_date) {
         return res.status(400).json({
@@ -39,7 +39,9 @@ const createLeave = async (req, res) => {
         start_date: startDate,
         end_date: endDate,
         reason,
-        leave_type
+        leave_type,
+        admin_id,
+        admin_name
       };
 
 
@@ -49,40 +51,73 @@ const createLeave = async (req, res) => {
       await leave.save();
 
       // Notify admins
-      const admins = await UserSchema.find({ role: 2 });
+      // const admins = await UserSchema.find({ role: 2 });
 
-      await Promise.all(
-        admins.map(async (admin) => {
-          const notification = await NotificationSchema.create({
-            sender_id: staff_id,
-            receiver_id: admin._id,
-            type: NotificationType.LEAVE_REQUEST,
-            message: `New leave request from staff ${staff_name} (${leave_type}) from ${dayjs(startDate).format("YYYY-MM-DD")} to ${dayjs(endDate).format("YYYY-MM-DD")}`,
-            reference_id: leave._id,
-            reference_model: "StaffLeave",
-            read: false
-          });
+      // await Promise.all(
+      //   admins.map(async (admin) => {
+      //     const notification = await NotificationSchema.create({
+      //       sender_id: staff_id,
+      //       receiver_id: admin._id,
+      //       type: NotificationType.LEAVE_REQUEST,
+      //       message: `New leave request from staff ${staff_name} (${leave_type}) from ${dayjs(startDate).format("YYYY-MM-DD")} to ${dayjs(endDate).format("YYYY-MM-DD")}`,
+      //       reference_id: leave._id,
+      //       reference_model: "StaffLeave",
+      //       read: false
+      //     });
 
-          // Emit via socket if admin is online
-          const io = req.app.get("socketio");
-          const adminSocket = await SocketSchema.findOne({ user_id: admin._id });
+      //     // Emit via socket if admin is online
+      //     const io = req.app.get("socketio");
+      //     const adminSocket = await SocketSchema.findOne({ user_id: admin._id });
 
-          if (adminSocket?.socket_id) {
-            io.to(adminSocket.socket_id).emit("leaveRequest", {
-              _id: notification._id,
-              sender_id: staff_id,
-              receiver_id: admin._id,
-              type: NotificationType.LEAVE_REQUEST,
-              message: notification.message,
-              reference_id: leave._id,
-              reference_model: "StaffLeave",
-              read: false
-            });
-          }
+      //     if (adminSocket?.socket_id) {
+      //       io.to(adminSocket.socket_id).emit("leaveRequest", {
+      //         _id: notification._id,
+      //         sender_id: staff_id,
+      //         receiver_id: admin._id,
+      //         type: NotificationType.LEAVE_REQUEST,
+      //         message: notification.message,
+      //         reference_id: leave._id,
+      //         reference_model: "StaffLeave",
+      //         read: false
+      //       });
+      //     }
 
-          return notification;
-        })
-      );
+      //     return notification;
+      //   })
+      // );
+
+
+
+      const admin = await UserSchema.findById(admin_id);
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found."
+        });
+      }
+      const notification = await NotificationSchema.create({
+        sender_id: staff_id,
+        receiver_id: admin._id,
+        type: NotificationType.LEAVE_REQUEST,
+        message: `New leave request from ${staff_name} (${leave_type}) from ${dayjs(startDate).format("DD-MM-YYYY")} to ${dayjs(endDate).format("DD-MM-YYYY")}`,
+        reference_id: leave._id,
+        reference_model: "StaffLeave",
+        read: false
+      });
+      const io = req.app.get("socketio");
+      const adminSocket = await SocketSchema.findOne({ user_id: admin._id });
+      if (adminSocket?.socket_id) {
+        io.to(adminSocket.socket_id).emit("leaveRequest", {
+          _id: notification._id,
+          sender_id: staff_id,
+          receiver_id: admin._id,
+          type: NotificationType.LEAVE_REQUEST,
+          message: notification.message,
+          reference_id: leave._id,
+          reference_model: "StaffLeave",
+          read: false
+        });
+      }
 
       logger.info("Leave request created successfully", { leave: leave?._id });
 
@@ -189,8 +224,10 @@ const updateLeaveStatus = async (req, res) => {
         ? (NotificationType?.LEAVE_CONFIRMED || "LEAVE_CONFIRMED")
         : (NotificationType?.LEAVE_CANCELLED || NotificationType?.LEAVE_CANCELLED || "LEAVE_CANCELLED");
 
-      const startDate = new Date(leave.start_date).toDateString();
-      const endDate = new Date(leave.end_date).toDateString();
+      // const startDate = new Date(leave.start_date).toDateString();
+      const startDate = dayjs(leave.start_date).format("DD-MM-YYYY")
+      // const endDate = new Date(leave.end_date).toDateString();
+      const endDate = dayjs(leave.end_date).format("DD-MM-YYYY")
 
       const dateRange =
         startDate === endDate ? startDate : `${startDate} to ${endDate}`;
@@ -261,7 +298,7 @@ const updateLeave = async (req, res) => {
   return new Promise(async () => {
     try {
       const { _id } = req.params;
-      const { start_date, end_date, leave_type, reason } = req.body;
+      const { start_date, end_date, leave_type, reason,admin_id, admin_name } = req.body;
 
       if (!_id) {
         return responseData.fail(res, "Leave ID is required", 400);
@@ -288,6 +325,8 @@ const updateLeave = async (req, res) => {
       leave.end_date = endDate;
       leave.leave_type = leave_type || leave.leave_type;
       leave.reason = reason || leave.reason;
+      if (admin_id) leave.admin_id = admin_id;
+      if (admin_name) leave.admin_name = admin_name;
 
       await leave.save();
 

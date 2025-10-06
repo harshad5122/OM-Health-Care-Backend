@@ -27,7 +27,17 @@ const StaffLeaveSchema = new mongoose.Schema(
             type: String,
             enum: Object.values(leaveStatus),
             default: leaveStatus.PENDING
-        }
+        },
+        admin_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "user", // reference your user collection
+            required: false,
+        },
+        admin_name: {
+            type: String,
+            required: false,
+            trim: true,
+        },
 
     },
     { timestamps: true }

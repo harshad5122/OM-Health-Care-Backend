@@ -231,40 +231,129 @@ module.exports = (io) => {
             emailTimers.set(receiver_id, timer);
         }
 
-        socket.on('chat_message', async (data) => {
+        // socket.on('chat_message', async (data) => {
+        //     try {
+        //         if (data.replyTo) {
+        //             const repliedMessage = await MessageSchema.findById(data.reply_to);
+        //             if (!repliedMessage) {
+        //                 logger.error(`ReplyTo message ID ${data.replyTo} not found`);
+        //                 return;
+        //             }
+        //         }
+
+        //         // Save message
+        //         let saveMessage = await createMessage({ ...data });
+        //         if (!saveMessage) {
+        //             logger.error(messageConstants.MESSAGE_NOT_SENT);
+        //             return;
+        //         }
+
+        //         const populatedMessage = await MessageSchema.findById(saveMessage._id)
+        //             .populate('attechment_id');
+
+        //         const attachmentDetails =
+        //             populatedMessage && Array.isArray(populatedMessage.attechment_id)
+        //                 ? populatedMessage.attechment_id.map(file => ({
+        //                     id: file._id,
+        //                     fileType: file.fileType,
+        //                     name: file.name,
+        //                     size: file.size,
+        //                     url: file.url
+        //                 }))
+        //                 : [];
+
+        //         const receiverSocketData = await SocketSchema.findOne({ user_id: data.receiver_id });
+
+        //         // CREATE NOTIFICATION in DB
+        //         const notification = await NotificationSchema.create({
+        //             sender_id: data.sender_id,
+        //             receiver_id: data.receiver_id,
+        //             type: NotificationType.MESSAGE,
+        //             message: saveMessage.message || "New message",
+        //             reference_id: saveMessage._id,
+        //             reference_model: "Message",
+        //         });
+
+        //         // Send message to receiver
+        //         if (receiverSocketData) {
+        //             const fullMessage = {
+        //                 ...saveMessage.toObject(),
+        //                 attechment_details: attachmentDetails
+        //             };
+
+        //             io.to(receiverSocketData.socket_id).emit('chat_message', fullMessage);
+        //             io.to(receiverSocketData.socket_id).emit('new_message', fullMessage);
+
+        //             await MessageSchema.findByIdAndUpdate(saveMessage._id, {
+        //                 message_status: 'delivered'
+        //             });
+
+        //             io.to(receiverSocketData.socket_id).emit('receiveNotification', {
+        //                 ...notification.toObject(),
+        //                 attechment_details: attachmentDetails,
+        //             });
+
+        //             const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
+        //             if (senderSocketData) {
+        //                 io.to(senderSocketData.socket_id).emit('message_delivered', {
+        //                     _id: saveMessage._id,
+        //                     status: 'delivered'
+        //                 });
+        //             }
+        //         } else {
+        //             logger.error(messageConstants.RECEIVER_NOT_FOUND);
+        //         }
+
+        //         // Schedule email reminder for this receiver
+        //         await scheduleEmailReminder(data.receiver_id);
+
+        //     } catch (error) {
+        //         logger.error("Error handling chat_message", error);
+        //     }
+        // });
+
+
+         socket.on('chat_message', async (data) => {
             try {
-                if (data.replyTo) {
-                    const repliedMessage = await MessageSchema.findById(data.reply_to);
+                // --- FIX: Capture the tempId sent from the frontend ---
+                const { tempId, ...messageData } = data;
+
+                if (messageData.replyTo) {
+                    const repliedMessage = await MessageSchema.findById(messageData.reply_to);
                     if (!repliedMessage) {
-                        logger.error(`ReplyTo message ID ${data.replyTo} not found`);
+                        logger.error(`ReplyTo message ID ${messageData.replyTo} not found`);
                         return;
                     }
                 }
 
-                // Save message
-                let saveMessage = await createMessage({ ...data });
+                // --- FIX: Save messageData, which doesn't include tempId ---
+                let saveMessage = await createMessage({ ...messageData });
                 if (!saveMessage) {
                     logger.error(messageConstants.MESSAGE_NOT_SENT);
                     return;
                 }
 
-                const populatedMessage = await MessageSchema.findById(saveMessage._id)
-                    .populate('attechment_id');
+                const populatedMessage = await MessageSchema.findById(saveMessage._id).populate('attechment_id');
 
-                const attachmentDetails =
-                    populatedMessage && Array.isArray(populatedMessage.attechment_id)
-                        ? populatedMessage.attechment_id.map(file => ({
-                            id: file._id,
-                            fileType: file.fileType,
-                            name: file.name,
-                            size: file.size,
-                            url: file.url
-                        }))
-                        : [];
+                const attachmentDetails = (populatedMessage && Array.isArray(populatedMessage.attechment_id))
+                    ? populatedMessage.attechment_id.map(file => ({
+                          id: file._id,
+                          fileType: file.fileType,
+                          name: file.name,
+                          size: file.size,
+                          url: file.url
+                      }))
+                    : [];
+                
+                const fullMessageForReceiver = {
+                    ...populatedMessage.toObject(),
+                    attechment_details: attachmentDetails
+                };
 
                 const receiverSocketData = await SocketSchema.findOne({ user_id: data.receiver_id });
+                let finalMessageStatus = MessageStatus.SENT; // Default to 'sent'
 
-                // CREATE NOTIFICATION in DB
+               // CREATE NOTIFICATION in DB
                 const notification = await NotificationSchema.create({
                     sender_id: data.sender_id,
                     receiver_id: data.receiver_id,
@@ -274,38 +363,40 @@ module.exports = (io) => {
                     reference_model: "Message",
                 });
 
-                // Send message to receiver
+
                 if (receiverSocketData) {
-                    const fullMessage = {
-                        ...saveMessage.toObject(),
-                        attechment_details: attachmentDetails
-                    };
+                    // Send message to the online receiver
+                    io.to(receiverSocketData.socket_id).emit('chat_message', fullMessageForReceiver);
+                    io.to(receiverSocketData.socket_id).emit('new_message', fullMessageForReceiver);
 
-                    io.to(receiverSocketData.socket_id).emit('chat_message', fullMessage);
-                    io.to(receiverSocketData.socket_id).emit('new_message', fullMessage);
-
+                    // Update status to delivered since the user is online
                     await MessageSchema.findByIdAndUpdate(saveMessage._id, {
-                        message_status: 'delivered'
+                        message_status: MessageStatus.DELIVERED
                     });
+                    finalMessageStatus = MessageStatus.DELIVERED;
 
-                    io.to(receiverSocketData.socket_id).emit('receiveNotification', {
+                      io.to(receiverSocketData.socket_id).emit('receiveNotification', {
                         ...notification.toObject(),
                         attechment_details: attachmentDetails,
                     });
-
-                    const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
-                    if (senderSocketData) {
-                        io.to(senderSocketData.socket_id).emit('message_delivered', {
-                            _id: saveMessage._id,
-                            status: 'delivered'
-                        });
-                    }
                 } else {
                     logger.error(messageConstants.RECEIVER_NOT_FOUND);
                 }
 
-                // Schedule email reminder for this receiver
-                await scheduleEmailReminder(data.receiver_id);
+                // --- NEW: Acknowledge the SENDER with the final message status ---
+                const senderSocketData = await SocketSchema.findOne({ user_id: data.sender_id });
+                if (senderSocketData) {
+                    const finalMessageForSender = {
+                        ...fullMessageForReceiver,
+                        message_status: finalMessageStatus, // This will be 'delivered' or 'sent'
+                        tempId: tempId // --- CRUCIAL: Include tempId to match on the frontend
+                    };
+                    io.to(senderSocketData.socket_id).emit('message_ack', finalMessageForSender);
+                }
+
+                if (!receiverSocketData) {
+                    await scheduleEmailReminder(data.receiver_id);
+                }
 
             } catch (error) {
                 logger.error("Error handling chat_message", error);
@@ -478,7 +569,7 @@ module.exports = (io) => {
 
         socket.on("broadcast_message", async (data) => {
             try {
-                const { sender_id, broadcast_id, message, attachments = [] } = data;
+                const { sender_id, broadcast_id, message, attachments = [], tempId } = data;
 
                 const sender = await User.findById(sender_id);
                 if (!sender || sender.role !== UserTypes.ADMIN) {

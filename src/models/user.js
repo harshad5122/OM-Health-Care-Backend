@@ -109,6 +109,11 @@ const userSchema = mongoose.Schema({
         ref: "staff", // <-- link to Staff collection
         required: false
     },
+    assign_doctor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "staff",
+        required: true
+    },
     status: {
         type: Number,
         required: true,

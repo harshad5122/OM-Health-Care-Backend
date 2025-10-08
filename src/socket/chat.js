@@ -489,7 +489,7 @@ module.exports = (io) => {
                 if (senderSocketData) {
                     io.to(senderSocketData.socket_id).emit('message_seen', {
                         messageId,
-                        message_status: 'seen',
+                        message_status: MessageStatus.SEEN,
                         is_read: true,
                         seen_by: user_id
                     });

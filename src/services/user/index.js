@@ -179,6 +179,16 @@ const getUserList = async (req, user, res) => {
 
             const pipeline = [
                 { $match: match },
+                {
+
+                    $lookup: {
+                        from: "staffs", // <-- collection name in MongoDB (plural of model)
+                        localField: "assign_doctor",
+                        foreignField: "_id",
+                        as: "doctor_info"
+                    }
+                },
+                { $unwind: { path: "$doctor_info", preserveNullAndEmptyArrays: true } },
                 { $sort: { created_at: -1 } },
                 ...(skip !== null && limit !== null ? [{ $skip: skip }, { $limit: limit }] : []),
                 {
@@ -210,6 +220,14 @@ const getUserList = async (req, user, res) => {
                         state: 1,
                         country: 1,
                         pincode: 1,
+
+                        assign_doctor: {
+                            $cond: {
+                                if: { $ifNull: ["$doctor_info", false] },
+                                then: { $concat: ["$doctor_info.firstname", " ", "$doctor_info.lastname"] },
+                                else: null
+                            }
+                        }
 
                         // build phone_full inside query
 
@@ -274,7 +292,7 @@ const updateUserProfile = async (req, userDetails, res) => {
     return new Promise(async () => {
         try {
             const userId = userDetails?._id;
-             const role = userDetails?.role;
+            const role = userDetails?.role;
             if (!userId) {
                 logger.error("User ID not found in token");
                 return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
@@ -296,12 +314,12 @@ const updateUserProfile = async (req, userDetails, res) => {
             ).select("-password -__v -token -is_deleted");
 
             let updatedStaff = null;
-           if (role === 3 && userDetails?.staff_id) {
-            updatedStaff = await StaffSchema.findByIdAndUpdate(
-                userDetails.staff_id,
-                { $set: updateData },
-                { new: true, runValidators: true }
-            ).select("-__v -is_deleted");
+            if (role === 3 && userDetails?.staff_id) {
+                updatedStaff = await StaffSchema.findByIdAndUpdate(
+                    userDetails.staff_id,
+                    { $set: updateData },
+                    { new: true, runValidators: true }
+                ).select("-__v -is_deleted");
             }
 
             if (!updatedUser) {

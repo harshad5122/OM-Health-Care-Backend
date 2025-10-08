@@ -84,68 +84,60 @@ const addDoctor = async (req, userDetails, res) => {
 };
 
 
+
 const getDoctor = async (req, userDetails, res) => {
   return new Promise(async () => {
     try {
-      const skip = parseInt(req.query.skip) || 0;
-      const limit = parseInt(req.query.limit) || 10;
+      const skip = req.query.skip ? parseInt(req.query.skip, 10) : 0;
+      // only use limit when positive (>0). If not provided or <=0, treat as "no limit"
+      const limit = (req.query.limit && parseInt(req.query.limit, 10) > 0)
+        ? parseInt(req.query.limit, 10)
+        : null;
+
       const from_date = req.query.from_date ? new Date(req.query.from_date) : null;
       const to_date = req.query.to_date ? new Date(req.query.to_date) : null;
-      const search = req.query.search || "";
+      const search = (req.query.search || "").trim();
 
-      let match;
+      // Always require non-deleted documents
+      let match = { is_deleted: false };
+
+      // Search
       if (search) {
-        match = {
-          $and: [
-            { is_deleted: false },
-            {
-              $or: [
-                { firstname: { $regex: search, $options: "i" } },
-                { lastname: { $regex: search, $options: "i" } },
-                { email: { $regex: search, $options: "i" } },
-                {
-                  $expr: {
-                    $regexMatch: {
-                      input: { $toString: "$phone" },
-                      regex: search,
-                      options: "i"
-                    }
-                  }
-                },
-                { phone: { $regex: search, $options: "i" } }
-              ]
+        match.$or = [
+          { firstname: { $regex: search, $options: "i" } },
+          { lastname: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          {
+            $expr: {
+              $regexMatch: {
+                input: { $toString: "$phone" },
+                regex: search,
+                options: "i"
+              }
             }
-          ]
-        };
-      } else {
-        match = { is_deleted: false };
+          },
+          { phone: { $regex: search, $options: "i" } }
+        ];
       }
 
+      // Date filter (created_at). Adjust field name if your DB uses `createdAt`
       if (from_date || to_date) {
-        const dateFilter = {};
-        if (from_date) dateFilter.$gte = from_date;
-        if (to_date) dateFilter.$lte = to_date;
-
-        // Apply date filter
-        if (match.$and) {
-          match.$and.push({ created_at: dateFilter });
-        } else {
-          match.created_at = dateFilter;
-        }
+        match.created_at = {};
+        if (from_date) match.created_at.$gte = from_date;
+        if (to_date) match.created_at.$lte = to_date;
       }
-      const result = await StaffSchema.aggregate([
-        { $match: match },   // ✅ use constructed match
+
+      // Build pipeline: $match at top-level so both facets use it
+      const pipeline = [
+        { $match: match },
+        { $sort: { created_at: -1 } },
         {
           $facet: {
             data: [
-              {
-                $sort: { created_at: -1 },
-              },
-              { $skip: skip },
-              { $limit: limit },
+              // Apply skip/limit only when limit is provided
+              ...(limit !== null ? [{ $skip: skip }, { $limit: limit }] : []),
               {
                 $project: {
-                  // top-level fields
                   firstname: 1,
                   lastname: 1,
                   email: 1,
@@ -175,39 +167,24 @@ const getDoctor = async (req, userDetails, res) => {
                   emergencyContact_name: "$familyDetails.emergencyContact.name",
                   emergencyContact_relation: "$familyDetails.emergencyContact.relation",
                   emergencyContact_contact: "$familyDetails.emergencyContact.contact",
-                },
-              },
-
+                }
+              }
             ],
-            totalCount: [
-              { $count: "count" }
-            ],
+            // totalCount runs after the top-level $match, so it returns the filtered total
+            totalCount: [{ $count: "count" }]
           }
         }
-      ],
+      ];
 
-      );
-      const doctors = result[0].data;
+      const result = await StaffSchema.aggregate(pipeline);
+      const doctors = result[0].data || [];
       const totalCount = result[0].totalCount[0]?.count || 0;
-      if (doctors.length > 0) {
-        return responseData.success(
-          res,
-          {
-            rows: doctors,
-            total_count: totalCount
-          },
-          `Doctor ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
-        );
-      } else {
-        return responseData.success(
-          res,
-          {
-            rows: [],
-            total_count: 0
-          },
-          `Doctor ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
-        );
-      }
+
+      return responseData.success(
+        res,
+        { rows: doctors, total_count: totalCount },
+        `Doctor ${messageConstants.LIST_FETCHED_SUCCESSFULLY}`
+      );
 
     } catch (error) {
       logger.error("Get Doctor " + messageConstants.INTERNAL_SERVER_ERROR, error);

@@ -63,7 +63,7 @@ const updateUserProfile = async (req, res) => {
 const editUser = async (req, res) => {
     try {
         const userId = req.params._id;
-        const response = await userService.editUser(req?.body, userId, res);
+        const response = await userService.editUser(req?.body, userId, res, req);
         logger.info(`${messageConstants.RESPONSE_FROM} edit user API`, JSON.stringify(response));
         res.send(response);
     } catch (err) {

@@ -381,8 +381,9 @@ const updateUserProfile = async (req, userDetails, res) => {
     });
 };
 
-const editUser = async (updateData, userId, res) => {
+const editUser = async (updateData, userId, res, req) => {
     return new Promise(async () => {
+
         try {
             // const userId = userDetails?._id;
             // const userId = req.params._id;

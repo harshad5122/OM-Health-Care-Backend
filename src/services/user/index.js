@@ -392,6 +392,17 @@ const editUser = async (updateData, userId, res) => {
                 return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
             }
 
+             const currentUser = await UserSchema.findById(userId);
+
+            if (!currentUser) {
+                logger.error(`User not found for id: ${userId}`);
+                return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
+            }
+
+            const previousDoctorId = currentUser.assign_doctor;
+
+             const newDoctorId = updateData.assign_doctor;
+
             // const updateData = req.body;
             updateData.updated_at = new Date(); // keep updated timestamp
 
@@ -407,6 +418,47 @@ const editUser = async (updateData, userId, res) => {
             }
 
             logger.info(`Updated user profile successfully for userId: ${userId}`);
+
+             if (newDoctorId && previousDoctorId?.toString() !== newDoctorId?.toString()) {
+                const assignedDoctor = await StaffSchema.findById(newDoctorId);
+                if (assignedDoctor) {
+                    const doctorUser = await UserSchema.findOne({ staff_id: assignedDoctor._id });
+                    if (doctorUser) {
+                        const notificationMsg = `User ${updatedUser.firstname} ${updatedUser.lastname} has been assigned to you.`;
+
+                        // Create notification in DB
+                        const notification = await NotificationSchema.create({
+                            sender_id: updatedUser._id,
+                            receiver_id: doctorUser._id,
+                            type: NotificationType.ASSIGN_USER,
+                            message: notificationMsg,
+                            reference_id: updatedUser._id,
+                            reference_model: "User",
+                            read: false,
+                        });
+
+                        // Emit socket notification if doctor connected
+                        const io = req?.app?.get('socketio');
+                        if (io) {
+                            const doctorSocket = await SocketSchema.findOne({ user_id: doctorUser._id });
+                            if (doctorSocket && doctorSocket.socket_id) {
+                                io.to(`${doctorSocket.socket_id}`).emit("userAssigned", {
+                                    _id: notification._id,
+                                    sender_id: updatedUser._id,
+                                    receiver_id: doctorUser._id,
+                                    type: NotificationType.ASSIGN_USER,
+                                    message: notificationMsg,
+                                    reference_id: updatedUser._id,
+                                    reference_model: "User",
+                                    read: false,
+                                });
+                            } else {
+                                console.warn(`Doctor ${doctorUser._id} not connected to socket. Notification saved only.`);
+                            }
+                        }
+                    }
+                }
+            }
             return responseData.success(res, updatedUser, messageConstants.UPDATE_SUCCESS);
         } catch (error) {
             logger.error("Error in editUser", error);

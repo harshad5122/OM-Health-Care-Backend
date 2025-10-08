@@ -831,6 +831,137 @@ const getAppontmentByDoctor = async (req, res) => {
     })
 
 }
+
+const getAppontmentByPatient = async (req, res) => {
+  return new Promise(async () => {
+    try {
+      const { doctor_id, patient_id } = req.params;
+      const { from, to } = req.query;
+
+      // Validate IDs
+      if (!mongoose.Types.ObjectId.isValid(doctor_id) || !mongoose.Types.ObjectId.isValid(patient_id)) {
+        return responseData.fail(res, "Invalid doctor or patient ID", 400);
+      }
+
+      // Build query — similar to structureAppointmentHelper but filtered by patient_id too
+      const query = {
+        staff_id: new mongoose.Types.ObjectId(doctor_id),
+        patient_id: new mongoose.Types.ObjectId(patient_id),
+        status: { $ne: AppointmentStatus.CANCELLED },
+      };
+
+      let startDate, endDate;
+      const hasRange = from && to;
+      if (hasRange) {
+        startDate = moment(from).startOf("day");
+        endDate = moment(to).endOf("day");
+
+        if (!startDate.isValid() || !endDate.isValid()) {
+          return responseData.fail(res, "Invalid from/to dates", 400);
+        }
+
+        query.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
+      }
+
+      // Fetch data
+      const [appointments, weeklySchedule, leaves] = await Promise.all([
+        AppointmentSchema.find(query).lean(),
+        WeeklyScheduleSchema.findOne({ staff_id: doctor_id }).lean(),
+        StaffLeaveSchema.find({ staff_id: doctor_id }).lean(),
+      ]);
+
+      // Prepare day-wise structure
+      const getApptDateStr = (appt) => (appt && appt.date ? moment(appt.date).format("YYYY-MM-DD") : null);
+
+      const dayStatus = {};
+
+      if (hasRange) {
+        // Create range days
+        let current = startDate.clone();
+        while (current.isSameOrBefore(endDate)) {
+          const dateStr = current.format("YYYY-MM-DD");
+          dayStatus[dateStr] = { date: dateStr, status: "unavailable", events: [] };
+          current.add(1, "day");
+        }
+
+        // Add appointments into dayStatus
+        appointments.forEach((appt) => {
+          const dateStr = getApptDateStr(appt);
+          if (!dateStr || !dayStatus[dateStr]) return;
+          dayStatus[dateStr].events.push({
+            title: `${appt.time_slot?.start || ""}-${appt.time_slot?.end || ""}`,
+            start: appt.time_slot?.start,
+            end: appt.time_slot?.end,
+            type: "booked",
+            status: appt.status,
+            id: appt._id,
+            visit_type: appt.visit_type,
+            patient_id: appt.patient_id,
+            creator: appt.creator,
+            created_by: appt.created_by,
+          });
+          dayStatus[dateStr].status = "available";
+        });
+
+        // Weekly schedule slots
+        if (weeklySchedule) {
+          Object.keys(dayStatus).forEach((dateStr) => {
+            const dayOfWeek = moment(dateStr).format("dddd").toUpperCase();
+            const daySchedule = weeklySchedule.weekly_schedule.find((d) => d.day === dayOfWeek);
+            const slots = daySchedule ? daySchedule.time_slots : [];
+
+            const booked = dayStatus[dateStr].events.map((e) => [toMinutes(e.start), toMinutes(e.end)]);
+            const mergedBooked = mergeIntervals(booked);
+            const scheduleIntervals = normalizeSchedule(slots);
+            const available = subtractIntervals(scheduleIntervals, mergedBooked);
+
+            dayStatus[dateStr].slots = {
+              available: formatSlots(available),
+              booked: formatSlots(mergedBooked),
+              leave: [],
+            };
+
+            if (available.length === 0 && booked.length > 0) {
+              dayStatus[dateStr].status = "unavailable";
+            } else if (available.length > 0) {
+              dayStatus[dateStr].status = "available";
+            }
+          });
+        }
+
+        return responseData.success(res, Object.values(dayStatus), messageConstants.FETCHED_SUCCESSFULLY);
+      } else {
+        // No range -> group by date
+        appointments.forEach((appt) => {
+          const dateStr = getApptDateStr(appt) || moment(appt.createdAt).format("YYYY-MM-DD");
+          if (!dayStatus[dateStr]) {
+            dayStatus[dateStr] = { date: dateStr, status: "unavailable", events: [] };
+          }
+          dayStatus[dateStr].events.push({
+            title: `${appt.time_slot?.start || ""}-${appt.time_slot?.end || ""}`,
+            start: appt.time_slot?.start,
+            end: appt.time_slot?.end,
+            type: "booked",
+            status: appt.status,
+            id: appt._id,
+            visit_type: appt.visit_type,
+            patient_id: appt.patient_id,
+            creator: appt.creator,
+            created_by: appt.created_by,
+          });
+          dayStatus[dateStr].status = "available";
+        });
+
+        return responseData.success(res, Object.values(dayStatus), messageConstants.FETCHED_SUCCESSFULLY);
+      }
+    } catch (error) {
+      console.error("getAppontmentByPatient error:", error);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+  });
+};
+
+
 const getAppointmentList = async(req,res)=>{
       return new Promise(async () => {
 
@@ -1321,6 +1452,7 @@ const updateAppointment = async (req, res) => {
 module.exports = {
     createAppointment,
     getAppontmentByDoctor,
+    getAppontmentByPatient,
     getPatients,
     updateAppointmentStatus,
     updateAppointment,

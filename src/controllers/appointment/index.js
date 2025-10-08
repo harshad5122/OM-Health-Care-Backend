@@ -24,6 +24,18 @@ const getAppontmentByDoctor = async (req, res) => {
         res.send(err);
     }
 }
+
+const getAppontmentByPatient = async (req, res) => {
+    try {
+        const response = await appointmentService?.getAppontmentByPatient(req, res);
+        logger.info(`${messageConstants.RESPONSE_FROM} get appointment API`, JSON.stringify(response));
+        res.send(response);
+    } catch (err) {
+        logger.error(`Get Appointment ${messageConstants.API_FAILED}`, err);
+        res.send(err);
+    }
+}
+
 const getAppointmentList = async (req, res) => {
     try {
         const response = await appointmentService?.getAppointmentList(req, res);
@@ -70,6 +82,7 @@ const updateAppointment = async (req, res) => {
 module.exports = {
     createAppointment,
     getAppontmentByDoctor,
+    getAppontmentByPatient,
     getPatients,
     updateAppointmentStatus,
     updateAppointment,

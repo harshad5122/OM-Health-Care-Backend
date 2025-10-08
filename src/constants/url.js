@@ -50,6 +50,7 @@ const urlConstants = {
 
     CREATE_APPPOINTMENT: '/create-appointment',
     GET_APPOINTMENT_BY_DOCTOR: '/get-appointment-by-doctor/:_id',
+    GET_APPOINTMENT_BY_PATIENT: '/get-appointment-by-patient/:doctor_id/:patient_id',
     GET_APPOINTMENT_LIST:'/get-appointment-list/:_id',
     GET_PATIENTS: '/get-patients',
     UPDATE_APPOINTMENT_STATUS: '/update-status',

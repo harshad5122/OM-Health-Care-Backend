@@ -10,6 +10,8 @@ const moment = require("moment");
 const StaffLeaveSchema = require('../../models/staff_leave')
 const NotificationSchema = require('../../models/notification')
 const SocketSchema = require('../../models/socket')
+const { UserTypes } = require('../../constants');
+const mongoose = require("mongoose");
 
 const createAppointment = async (req, res) => {
     return new Promise(async () => {
@@ -870,25 +872,180 @@ const getAppointmentList = async(req,res)=>{
     })
 }
 
+
 const getPatients = async (req, res) => {
-    return new Promise(async () => {
+     return new Promise(async () => {
+  try {
+    const {
+      doctor_id = null,
+      search = "",
+      skip,
+      limit,
+      from_date,
+      to_date,
+    } = req.query;
 
-        try {
-            const patients = await UserSchema?.find({
-                role: UserRole.USER
-            })
+    const skipVal = skip && !isNaN(skip) ? parseInt(skip) : 0;
+    const limitVal = limit && !isNaN(limit) ? parseInt(limit) : null;
 
-            return responseData.success(
-                res,
-                patients,
-                messageConstants.FETCHED_SUCCESSFULLY
-            );
-        } catch (error) {
-            console.error("get patients error:", error);
-            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
-        }
-    })
-}
+    // 🔹 Base match condition for patients
+    const match = {
+      role: UserTypes.USER,
+      is_deleted: false,
+    };
+
+    // 🔹 Search filter
+    if (search) {
+      match.$or = [
+        { firstname: { $regex: search, $options: "i" } },
+        { lastname: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $toString: "$phone" },
+              regex: search,
+              options: "i",
+            },
+          },
+        },
+      ];
+    }
+
+    // 🔹 Date range filter (created_at)
+    let dateFilter = {};
+    if (from_date) dateFilter.$gte = new Date(from_date);
+    if (to_date) dateFilter.$lte = new Date(to_date);
+    if (Object.keys(dateFilter).length > 0) {
+      match.created_at = dateFilter;
+    }
+
+    // 🔹 Aggregation pipeline
+    const pipeline = [
+      { $match: match },
+
+      // Join appointments for each patient
+      {
+        $lookup: {
+          from: "appointments",
+          let: { patientId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ["$patient_id", "$$patientId"],
+                },
+              },
+            },
+          ],
+          as: "appointments",
+        },
+      },
+
+      // Filter only those who have appointments with selected doctor (if doctor_id provided)
+      ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
+        ? [
+            {
+              $addFields: {
+                appointments: {
+                  $filter: {
+                    input: "$appointments",
+                    as: "appt",
+                    cond: {
+                      $eq: [
+                        "$$appt.staff_id",
+                        new mongoose.Types.ObjectId(doctor_id),
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+            {
+              $match: {
+                "appointments.0": { $exists: true }, // keep only patients having at least 1 appointment with this doctor
+              },
+            },
+          ]
+        : []),
+
+      // Add visit_count field
+      {
+        $addFields: {
+          visit_count: { $size: "$appointments" },
+        },
+      },
+
+      // Sort latest first
+      { $sort: { created_at: -1 } },
+
+      // Pagination
+      ...(limitVal ? [{ $skip: skipVal }, { $limit: limitVal }] : []),
+
+      // Project only needed fields
+      {
+        $project: {
+          _id: 1,
+          firstname: 1,
+          lastname: 1,
+          email: 1,
+          phone: 1,
+          address: 1,
+          country: 1,
+          state: 1,
+          city: 1,
+          gender: 1,
+          assign_doctor: 1,
+          dob: {
+            $cond: {
+              if: { $ifNull: ["$dob", false] },
+              then: { $dateToString: { format: "%d/%m/%Y", date: "$dob" } },
+              else: null,
+            },
+          },
+          visit_count: 1,
+        },
+      },
+    ];
+
+    // Execute aggregation and count
+    const [patients, totalCount] = await Promise.all([
+      UserSchema.aggregate(pipeline),
+      // Count total unique patients matching filters
+      doctor_id
+        ? AppointmentSchema.aggregate([
+            {
+              $match: {
+                staff_id: new mongoose.Types.ObjectId(doctor_id),
+              },
+            },
+            { $group: { _id: "$patient_id" } },
+            { $count: "count" },
+          ]).then((r) => (r[0]?.count || 0))
+        : UserSchema.countDocuments(match),
+    ]);
+
+    return responseData.success(
+      res,
+       patients, 
+      messageConstants.FETCHED_SUCCESSFULLY,
+      {
+        // rows: patients,
+        total_count: totalCount,
+      },
+      
+    );
+  } catch (error) {
+    logger.error("Get Patients Error:", error);
+    return responseData.fail(
+      res,
+      messageConstants.INTERNAL_SERVER_ERROR,
+      500
+    );
+  }
+  })
+};
+
 
 const updateAppointmentStatus = async (req, res) => {
     return new Promise(async () => {

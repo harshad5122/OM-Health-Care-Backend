@@ -1,4 +1,6 @@
-const appointmentService = require('../../services/appointment')
+const appointmentService = require('../../services/appointment');
+const { logger } = require('../../utils');
+const { messageConstants } = require('../../constants');
 
 
 const createAppointment = async (req, res) => {

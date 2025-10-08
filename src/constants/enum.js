@@ -64,7 +64,8 @@ const NotificationType = Object.freeze({
     SYSTEM: "SYSTEM",
     LEAVE_REQUEST: "LEAVE_REQUEST",
     LEAVE_CONFIRMED: "LEAVE_CONFIRMED",
-    LEAVE_CANCELLED: "LEAVE_CANCELLED"
+    LEAVE_CANCELLED: "LEAVE_CANCELLED",
+    ASSIGN_USER: "ASSIGN_USER"
 })
 
 const leaveTypeTimes = {

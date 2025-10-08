@@ -2,10 +2,12 @@
 
 const UserSchema = require('../../models/user');
 const MessageSchema = require('../../models/message');
-const StaffSchema = require('../../models/staff')
+const StaffSchema = require('../../models/staff');
+const NotificationSchema = require('../../models/notification');
+const SocketSchema = require('../../models/socket');
 const { responseData, messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../../constants');
 const { logger, mail } = require('../../utils');
-const { UserTypes, MessageStatus } = require('../../constants/enum');
+const { UserTypes, MessageStatus, NotificationType  } = require('../../constants/enum');
 const { cryptoGraphy } = require('../../middlewares');
 
 // services/userService.js
@@ -57,6 +59,49 @@ const createUser = async (userData, res) => {
                 mailSubjectConstants.ADD_DOCTOR_SUBJECT,
                 mailContent
             );
+
+             if (user.assign_doctor) {
+                const assignedDoctor = await StaffSchema.findById(user.assign_doctor);
+
+                if (assignedDoctor) {
+                    const doctorUser = await UserSchema.findOne({ staff_id: assignedDoctor._id });
+
+                    if (doctorUser) {
+                        const notificationMsg = `New user ${user.firstname} ${user.lastname} has been assigned to you.`;
+
+                        // Create notification entry
+                        const notification = await NotificationSchema.create({
+                            sender_id: user._id,
+                            receiver_id: doctorUser._id,
+                            type: NotificationType.ASSIGN_USER,
+                            message: notificationMsg,
+                            reference_id: user._id,
+                            reference_model: "User",
+                            read: false,
+                        });
+
+                        // Send socket notification if doctor connected
+                        const io = req?.app?.get('socketio');
+                        if (io) {
+                            const doctorSocket = await SocketSchema.findOne({ user_id: doctorUser._id });
+                            if (doctorSocket && doctorSocket.socket_id) {
+                                io.to(`${doctorSocket.socket_id}`).emit("userAssigned", {
+                                    _id: notification._id,
+                                    sender_id: user._id,
+                                    receiver_id: doctorUser._id,
+                                    type: NotificationType.ASSIGN_USER,
+                                    message: notificationMsg,
+                                    reference_id: user._id,
+                                    reference_model: "User",
+                                    read: false,
+                                });
+                            } else {
+                                console.warn(`Doctor ${doctorUser._id} not connected to socket. Notification saved only.`);
+                            }
+                        }
+                    }
+                }
+            }
 
             // } 
             delete userObj.password;

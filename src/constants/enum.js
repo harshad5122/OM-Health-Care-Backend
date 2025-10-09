@@ -31,7 +31,6 @@ const WeekDays = Object.freeze({
 });
 
 const AppointmentStatus = Object.freeze({
-    BOOKED: "BOOKED",
     PENDING: "PENDING",
     CONFIRMED: "CONFIRMED",
     CANCELLED: "CANCELLED"

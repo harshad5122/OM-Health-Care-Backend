@@ -1031,7 +1031,7 @@ const getAppointmentList = async (req, res) => {
       .populate({
         path: 'patient_id',
         model: UserSchema,
-        select: 'firstname lastname phone address countryCode' 
+        select: 'firstname lastname phone address countryCode city state country'
       })
       .sort({ date: 1 }); // optional: sort by date
 
@@ -1059,6 +1059,9 @@ const getAppointmentList = async (req, res) => {
           ? `${patient.countryCode}${patient.phone}`
           : patient.phone || "",
         patient_address: patient.address || "",
+        patient_city: patient.city||"",
+         patient_state: patient.state||"",
+          patient_country: patient.country||"",
       };
     });
 

@@ -269,7 +269,7 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
     try {
 
         // Build query — filter by date only if both from+to provided
-        const query = { staff_id: doctorId, status: { $ne: AppointmentStatus?.CANCELLED } };
+        const query = { staff_id: doctorId, status: { $nin: [AppointmentStatus?.CANCELLED, AppointmentStatus?.COMPLETED] } };
         let startDate, endDate;
         const hasRange = from && to;
         if (hasRange) {
@@ -1778,7 +1778,49 @@ const updateAppointment = async (req, res) => {
 };
 
 
+const updatePatientStatus = async (req, res) => {
+  return new Promise(async () => {
+    try {
+      const { patient_status, message } = req.body;
+      const patientId = req.params._id;
 
+      // Validate patientId
+      if (!patientId || !mongoose.Types.ObjectId.isValid(patientId)) {
+        return responseData.fail(res, "Valid patient ID is required", 400);
+      }
+
+      // Validate patient_status
+      if (!patient_status || !Object.values(PatientStatus).includes(patient_status)) {
+        return responseData.fail(res, "Invalid patient_status", 400);
+      }
+
+      // Update patient_status in all appointments for this patient
+      const result = await AppointmentSchema.updateMany(
+        { patient_id: patientId },
+        { patient_status }
+      );
+
+      if (!result || result.matchedCount === 0) {
+        return responseData.fail(res, "No appointments found for this patient", 404);
+      }
+
+      // Return simplified response
+      return responseData.success(
+        res,
+        {
+          patientId,
+          patient_status,
+          message: message || "",
+        },
+        messageConstants.DATA_SAVED_SUCCESSFULLY
+      );
+
+    } catch (error) {
+      logger.error("Update patient status error:", error);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+  });
+};
 
 module.exports = {
     createAppointment,
@@ -1787,5 +1829,6 @@ module.exports = {
     getPatients,
     updateAppointmentStatus,
     updateAppointment,
-    getAppointmentList
+    getAppointmentList,
+    updatePatientStatus
 }

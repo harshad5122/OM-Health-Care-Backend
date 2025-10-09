@@ -18,7 +18,7 @@ const AppointmentSchema = new mongoose.Schema(
         },
         created_by: {
             type: String,
-            enum: ["ADMIN", "USER"]
+            enum: ["ADMIN", "DOCTOR"]
         },
         creator: { type: mongoose.Schema.Types.ObjectId, ref: "users", required: true },
     },

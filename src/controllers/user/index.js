@@ -87,7 +87,7 @@ const createUser = async (req, res) => {
         userData = req?.body;
         userData.isPasswordChanged = true;
         userData.addedByAdmin = true;
-        const response = await userService.createUser(userData, res);
+        const response = await userService.createUser(userData, res, req);
         logger.info(`${messageConstants.RESPONSE_FROM} delete user API`, JSON.stringify(response));
         res.send(response);
     } catch (err) {

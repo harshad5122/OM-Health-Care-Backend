@@ -1,5 +1,4 @@
 // services/user/index.js
-
 const UserSchema = require('../../models/user');
 const MessageSchema = require('../../models/message');
 const StaffSchema = require('../../models/staff');
@@ -7,12 +6,13 @@ const NotificationSchema = require('../../models/notification');
 const SocketSchema = require('../../models/socket');
 const { responseData, messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../../constants');
 const { logger, mail } = require('../../utils');
-const { UserTypes, MessageStatus, NotificationType  } = require('../../constants/enum');
+const { UserTypes, MessageStatus, NotificationType } = require('../../constants/enum');
 const { cryptoGraphy } = require('../../middlewares');
+const { sendWhatsAppMessage } = require("../../utils/whatsapp");
 
 // services/userService.js
 
-const createUser = async (userData, res) => {
+const createUser = async (userData, res, req) => {
     return new Promise(async () => {
 
         try {
@@ -60,22 +60,25 @@ const createUser = async (userData, res) => {
                 mailContent
             );
 
-             if (user.assign_doctor) {
-                const assignedDoctor = await StaffSchema.findById(user.assign_doctor);
+            let doctorUser = null;
+            let doctor = null;
 
-                if (assignedDoctor) {
-                    const doctorUser = await UserSchema.findOne({ staff_id: assignedDoctor._id });
+            if (savedUser.assign_doctor) {
+                doctor = await StaffSchema.findById(savedUser.assign_doctor);
+
+                if (doctor) {
+                    const doctorUser = await UserSchema.findOne({ staff_id: doctor._id });
 
                     if (doctorUser) {
-                        const notificationMsg = `New user ${user.firstname} ${user.lastname} has been assigned to you.`;
+                        const notificationMsg = `New user ${savedUser.firstname} ${savedUser.lastname} has been assigned to you.`;
 
                         // Create notification entry
                         const notification = await NotificationSchema.create({
-                            sender_id: user._id,
+                            sender_id: savedUser._id,
                             receiver_id: doctorUser._id,
                             type: NotificationType.ASSIGN_USER,
                             message: notificationMsg,
-                            reference_id: user._id,
+                            reference_id: savedUser._id,
                             reference_model: "User",
                             read: false,
                         });
@@ -87,11 +90,11 @@ const createUser = async (userData, res) => {
                             if (doctorSocket && doctorSocket.socket_id) {
                                 io.to(`${doctorSocket.socket_id}`).emit("userAssigned", {
                                     _id: notification._id,
-                                    sender_id: user._id,
+                                    sender_id: savedUser._id,
                                     receiver_id: doctorUser._id,
                                     type: NotificationType.ASSIGN_USER,
                                     message: notificationMsg,
-                                    reference_id: user._id,
+                                    reference_id: savedUser._id,
                                     reference_model: "User",
                                     read: false,
                                 });
@@ -102,6 +105,48 @@ const createUser = async (userData, res) => {
                     }
                 }
             }
+
+            //  Send WhatsApp message to new user
+//             try {
+//                 const msg = `Welcome to Om Health Care, ${savedUser.firstname} ${savedUser.lastname}!
+// You have been successfully registered.
+// ${doctor ? `Your assigned doctor is Dr. ${doctor.firstname} ${doctor.lastname}.
+// Doctor Contact: ${doctorUser?.phone ?? "N/A"}` : ""}
+// Thank you for choosing Om Health Care!`;
+
+
+//                 if (savedUser.phone) {
+//                     // Add this log to see the raw phone number from the database
+//                     logger.info(`Raw phone from DB to send WhatsApp: ${savedUser.phone}`);
+//                     await sendWhatsAppMessage(savedUser.phone, msg);
+//                 } else {
+//                     if (savedUser.phone) {
+//                         await sendWhatsAppMessage(savedUser.phone, msg);
+//                     } else {
+//                         logger.warn(`User ${savedUser._id} has no phone number to send WhatsApp message.`);
+//                     }
+//                 }
+//             } catch (err) {
+//                 logger.error("Error sending WhatsApp message:", err);
+//             }
+
+try {
+
+    // const userName = `${savedUser.firstname} ${savedUser.lastname}`;
+  
+    // const doctorInfo = doctor ? `${doctor.firstname} ${doctor.lastname}` : "Not yet assigned";
+    
+    // const templateParams = [userName, doctorInfo];
+
+    if (savedUser.phone) {
+        // Call with template name and parameters
+        await sendWhatsAppMessage(savedUser.phone, "hello_world", []);
+    } else {
+        logger.warn(`User ${savedUser._id} has no phone number to send WhatsApp message.`);
+    }
+} catch (err) {
+    logger.error("Error sending WhatsApp message:", err);
+}
 
             // } 
             delete userObj.password;
@@ -393,7 +438,7 @@ const editUser = async (updateData, userId, res, req) => {
                 return responseData.fail(res, messageConstants.USER_NOT_FOUND, 404);
             }
 
-             const currentUser = await UserSchema.findById(userId);
+            const currentUser = await UserSchema.findById(userId);
 
             if (!currentUser) {
                 logger.error(`User not found for id: ${userId}`);
@@ -402,7 +447,7 @@ const editUser = async (updateData, userId, res, req) => {
 
             const previousDoctorId = currentUser.assign_doctor;
 
-             const newDoctorId = updateData.assign_doctor;
+            const newDoctorId = updateData.assign_doctor;
 
             // const updateData = req.body;
             updateData.updated_at = new Date(); // keep updated timestamp
@@ -420,7 +465,7 @@ const editUser = async (updateData, userId, res, req) => {
 
             logger.info(`Updated user profile successfully for userId: ${userId}`);
 
-             if (newDoctorId && previousDoctorId?.toString() !== newDoctorId?.toString()) {
+            if (newDoctorId && previousDoctorId?.toString() !== newDoctorId?.toString()) {
                 const assignedDoctor = await StaffSchema.findById(newDoctorId);
                 if (assignedDoctor) {
                     const doctorUser = await UserSchema.findOne({ staff_id: assignedDoctor._id });

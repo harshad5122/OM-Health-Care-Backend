@@ -25,7 +25,7 @@ const createAppointment = async (req, res) => {
                 date,
                 time_slot,
                 visit_type,
-                created_by: userDetails?.role == UserRole.ADMIN ? "ADMIN" : "USER",
+                created_by: userDetails?.role == UserRole.ADMIN ? "ADMIN" : "DOCTOR",
                 status: AppointmentStatus?.PENDING,
                 creator: userDetails?._id
             }
@@ -123,6 +123,7 @@ const mergeIntervals = (intervals) => {
     }
     return merged;
 };
+
 function mergeSlots(slots) {
     slots.sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
 
@@ -847,7 +848,7 @@ const getAppontmentByPatient = async (req, res) => {
       const query = {
         staff_id: new mongoose.Types.ObjectId(doctor_id),
         patient_id: new mongoose.Types.ObjectId(patient_id),
-        status: { $ne: AppointmentStatus.CANCELLED },
+        // status: { $ne: AppointmentStatus.CANCELLED },
       };
 
       let startDate, endDate;
@@ -962,46 +963,122 @@ const getAppontmentByPatient = async (req, res) => {
 };
 
 
-const getAppointmentList = async(req,res)=>{
-      return new Promise(async () => {
+// const getAppointmentList = async(req,res)=>{
+//       return new Promise(async () => {
 
-        try {
-            // const doctorId = req.params._id;
-            // const { from, to } = req.query;
-            const doctorId = req.params._id;
-            const { from, to, status } = req.query;
-            const query = { staff_id: doctorId };
-            if (status) {
-                const statusArray = status.split(",").map(s => s.trim()); 
-                if (statusArray.length === 1) {
-                query.status = statusArray[0]; 
-                } else {
-                query.status = { $in: statusArray }; 
-                }
-            }
-            let startDate, endDate;
-            const hasRange = from && to;
-            if (hasRange) {
-            startDate = moment(from).startOf("day");
-            endDate = moment(to).endOf("day");
+//         try {
+//             // const doctorId = req.params._id;
+//             // const { from, to } = req.query;
+//             const doctorId = req.params._id;
+//             const { from, to, status } = req.query;
+//             const query = { staff_id: doctorId };
+//             if (status) {
+//                 const statusArray = status.split(",").map(s => s.trim()); 
+//                 if (statusArray.length === 1) {
+//                 query.status = statusArray[0]; 
+//                 } else {
+//                 query.status = { $in: statusArray }; 
+//                 }
+//             }
+//             let startDate, endDate;
+//             const hasRange = from && to;
+//             if (hasRange) {
+//             startDate = moment(from).startOf("day");
+//             endDate = moment(to).endOf("day");
 
-            if (!startDate.isValid() || !endDate.isValid()) {
-                return responseData.fail(res, "Invalid from/to dates", 400);
-            }
+//             if (!startDate.isValid() || !endDate.isValid()) {
+//                 return responseData.fail(res, "Invalid from/to dates", 400);
+//             }
 
-            query.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
-            }
-            const result = await AppointmentSchema.find(query).sort({ createdAt: -1 }).lean();
-            // const result = await AppointmentSchema.find({ staff_id: doctorId}).lean();
-            return responseData.success(res, result, messageConstants.FETCHED_SUCCESSFULLY);
+//             query.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
+//             }
+//             const result = await AppointmentSchema.find(query).sort({ createdAt: -1 }).lean();
+//             // const result = await AppointmentSchema.find({ staff_id: doctorId}).lean();
+//             return responseData.success(res, result, messageConstants.FETCHED_SUCCESSFULLY);
            
-        } catch (error) {
-            console.error("getAppointmentByDoctor error:", error);
-            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
-        }
+//         } catch (error) {
+//             console.error("getAppointmentByDoctor error:", error);
+//             return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+//         }
 
-    })
-}
+//     })
+// }
+
+const getAppointmentList = async (req, res) => {
+    return new Promise(async () => {
+  try {
+    const staffId = req.params._id ;
+    const { from, to } = req.query;
+
+    if (!staffId) {
+      return responseData.fail(res, "Staff ID is required", 400);
+    }
+
+    // Date filter setup
+    const filter = {
+      staff_id: staffId,
+    };
+
+    if (from && to) {
+      filter.date = {
+        $gte: new Date(from),
+        $lte: new Date(to),
+      };
+    }
+
+
+    const appointments = await AppointmentSchema.find(filter)
+      .populate({
+        path: 'patient_id',
+        model: UserSchema,
+        select: 'firstname lastname phone address countryCode' 
+      })
+      .sort({ date: 1 }); // optional: sort by date
+
+    const formattedAppointments = appointments.map((apt) => {
+      const patient = apt.patient_id || {};
+
+      return {
+        _id: apt._id,
+        staff_id: apt.staff_id,
+        patient_id: patient._id || null,
+        date: apt.date,
+        time_slot: apt.time_slot,
+        visit_type: apt.visit_type,
+        status: apt.status,
+        created_by: apt.created_by,
+        creator: apt.creator,
+        createdAt: apt.createdAt,
+        updatedAt: apt.updatedAt,
+
+        // ✅ New fields added:
+        patient_name: patient.firstname && patient.lastname 
+          ? `${patient.firstname} ${patient.lastname}` 
+          : patient.firstname || "",
+        patient_phone: patient.countryCode && patient.phone
+          ? `${patient.countryCode}${patient.phone}`
+          : patient.phone || "",
+        patient_address: patient.address || "",
+      };
+    });
+
+    logger.info("Appointments fetched successfully");
+
+    return responseData.success(
+      res,
+      formattedAppointments,
+      messageConstants.DATA_FETCHED_SUCCESSFULLY
+    );
+  } catch (error) {
+    logger.error("Get Appointment List " + messageConstants.INTERNAL_SERVER_ERROR, error);
+    return responseData.fail(
+      res,
+      messageConstants.INTERNAL_SERVER_ERROR,
+      500
+    );
+  }
+   })
+};
 
 
 const getPatients = async (req, res) => {

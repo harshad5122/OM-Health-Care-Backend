@@ -1073,7 +1073,7 @@ const getAppointmentList = async (req, res) => {
     return new Promise(async () => {
   try {
     const staffId = req.params._id ;
-    const { from, to } = req.query;
+    const { from, to, status } = req.query;
 
     if (!staffId) {
       return responseData.fail(res, "Staff ID is required", 400);
@@ -1090,6 +1090,10 @@ const getAppointmentList = async (req, res) => {
         $lte: new Date(to),
       };
     }
+
+     if (status) {
+        filter.status = status;
+      }
 
 
     const appointments = await AppointmentSchema.find(filter)
@@ -1159,6 +1163,7 @@ const getPatients = async (req, res) => {
       limit,
       from_date,
       to_date,
+      patient_status,
     } = req.query;
 
     const skipVal = skip && !isNaN(skip) ? parseInt(skip) : 0;
@@ -1213,6 +1218,7 @@ const getPatients = async (req, res) => {
                 },
               },
             },
+            { $sort: { createdAt: -1 } },
           ],
           as: "appointments",
         },
@@ -1252,6 +1258,16 @@ const getPatients = async (req, res) => {
           visit_count: { $size: "$appointments" },
         },
       },
+
+      ...(patient_status
+          ? [
+              {
+                $match: {
+                  patient_status: patient_status,
+                },
+              },
+            ]
+          : []),
       
 
       // Sort latest first

@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { AppointmentStatus, VisitType } = require('../constants/enum')
+const { AppointmentStatus, VisitType, PatientStatus } = require('../constants/enum')
 
 const AppointmentSchema = new mongoose.Schema(
     {
@@ -14,7 +14,12 @@ const AppointmentSchema = new mongoose.Schema(
         status: {
             type: String,
             enum: Object.values(AppointmentStatus),
-            default: AppointmentStatus.PENDING
+            default: AppointmentStatus.CONFIRMED
+        },
+        patient_status: {
+            type: String,
+            enum: Object.values(PatientStatus),
+            default: PatientStatus.CONTINUE
         },
         created_by: {
             type: String,

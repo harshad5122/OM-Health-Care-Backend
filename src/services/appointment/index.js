@@ -1,5 +1,5 @@
 const { UserRole } = require('../../constants');
-const { AppointmentStatus, NotificationType, leaveTypeTimes } = require('../../constants/enum');
+const { AppointmentStatus, NotificationType, leaveTypeTimes, PatientStatus } = require('../../constants/enum');
 const AppointmentSchema = require('../../models/appointment');
 const WeeklyScheduleSchema = require('../../models/weekly_schedule_pattern');
 const UserSchema = require('../../models/user');
@@ -26,10 +26,12 @@ const createAppointment = async (req, res) => {
                 time_slot,
                 visit_type,
                 created_by: userDetails?.role == UserRole.ADMIN ? "ADMIN" : "DOCTOR",
-                status: AppointmentStatus?.PENDING,
+                status: AppointmentStatus?.CONFIRMED,
+                patient_status: PatientStatus.CONTINUE,
                 creator: userDetails?._id
             }
-            const appointment = await AppointmentSchema?.create({ ...payload });
+            // const appointment = await AppointmentSchema?.create({ ...payload });
+            const appointment = await AppointmentSchema.create(payload);
             const user = await UserSchema?.findOne({ staff_id });
 
             const appointmentDate = new Date(date);
@@ -44,36 +46,95 @@ const createAppointment = async (req, res) => {
             const formattedStartTime = formatTimeTo12Hour(time_slot?.start);
             const formattedEndTime = formatTimeTo12Hour(time_slot?.end);
 
-            const notification = await NotificationSchema.create({
-                sender_id: patient_id,
-                receiver_id: user?._id,
-                type: NotificationType.APPOINTMENT_REQUEST,
-                // message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
-                message: `New appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
-                reference_id: appointment._id,
-                reference_model: "Appointment",
-                read: false
-            });
-            const io = req.app.get('socketio');
+             const message = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
+             const patient = await UserSchema.findById(patient_id);
+             const admins = await UserSchema.find({ role: UserRole.ADMIN });
 
-            const doctorSocket = await SocketSchema.findOne({ user_id: user._id });
+             const io = req.app.get('socketio');
+            const notifications = [];
 
-            if (doctorSocket && doctorSocket.socket_id) {
-            io.to(`${doctorSocket.socket_id}`).emit("appointmentRequest", {
-                _id: notification?._id,
-                sender_id: patient_id,
-                receiver_id: user?._id,
-                type: NotificationType.APPOINTMENT_REQUEST,
-                // message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
-                message: `New appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
-                reference_id: appointment._id,
-                reference_model: "Appointment",
-                read: false
-            });
-            } else {
-            console.warn(` Doctor ${user?._id} not connected to socket. Notification saved to DB only.`);
-}
+            // 🔹 Notify patient
+      if (patient) {
+        const notif = await NotificationSchema.create({
+          sender_id: userDetails?._id,
+          receiver_id: patient._id,
+          type: NotificationType.APPOINTMENT_CONFIRMED,
+          message,
+          reference_id: appointment._id,
+          reference_model: "Appointment",
+          read: false
+        });
+        notifications.push(notif);
 
+        // send via socket
+        const patientSocket = await SocketSchema.findOne({ user_id: patient._id });
+        if (patientSocket && patientSocket.socket_id && io) {
+          io.to(patientSocket.socket_id).emit("appointmentStatusUpdated", {
+            ...notif.toObject(),
+            createdAt: notif.createdAt
+          });
+        }
+      }
+
+      // 🔹 Notify all admins
+      for (const admin of admins) {
+        const notif = await NotificationSchema.create({
+          sender_id: userDetails?._id,
+          receiver_id: admin._id,
+          type: NotificationType.APPOINTMENT_CONFIRMED,
+          message,
+          reference_id: appointment._id,
+          reference_model: "Appointment",
+          read: false
+        });
+        notifications.push(notif);
+
+        const adminSocket = await SocketSchema.findOne({ user_id: admin._id });
+        if (adminSocket && adminSocket.socket_id && io) {
+          io.to(adminSocket.socket_id).emit("appointmentStatusUpdated", {
+            ...notif.toObject(),
+            createdAt: notif.createdAt
+          });
+        }
+      }
+
+
+
+
+
+
+//             const notification = await NotificationSchema.create({
+//                 sender_id: patient_id,
+//                 receiver_id: user?._id,
+//                 type: NotificationType.APPOINTMENT_REQUEST,
+//                 // message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+//                 message: `New appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
+//                 reference_id: appointment._id,
+//                 reference_model: "Appointment",
+//                 read: false
+//             });
+//             // const io = req.app.get('socketio');
+
+//             const doctorSocket = await SocketSchema.findOne({ user_id: user._id });
+
+//             if (doctorSocket && doctorSocket.socket_id) {
+//             io.to(`${doctorSocket.socket_id}`).emit("appointmentRequest", {
+//                 _id: notification?._id,
+//                 sender_id: patient_id,
+//                 receiver_id: user?._id,
+//                 type: NotificationType.APPOINTMENT_REQUEST,
+//                 // message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+//                 message: `New appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
+//                 reference_id: appointment._id,
+//                 reference_model: "Appointment",
+//                 read: false
+//             });
+//             } else {
+//             console.warn(` Doctor ${user?._id} not connected to socket. Notification saved to DB only.`);
+// }
+
+
+         
 
             logger.info(
                 "Appointment created successfully",
@@ -83,7 +144,11 @@ const createAppointment = async (req, res) => {
 
             return responseData.success(
                 res,
-                appointment, // return both if you want
+                // appointment, 
+                  {
+          ...appointment.toObject(),
+          patient_status: appointment.patient_status
+        },
                 messageConstants.DATA_SAVED_SUCCESSFULLY
             );
         } catch (error) {
@@ -1183,9 +1248,11 @@ const getPatients = async (req, res) => {
       // Add visit_count field
       {
         $addFields: {
+          patient_status: { $arrayElemAt: ["$appointments.patient_status", 0] },
           visit_count: { $size: "$appointments" },
         },
       },
+      
 
       // Sort latest first
       { $sort: { created_at: -1 } },
@@ -1207,6 +1274,7 @@ const getPatients = async (req, res) => {
           city: 1,
           gender: 1,
           assign_doctor: 1,
+          patient_status: 1,
           dob: {
             $cond: {
               if: { $ifNull: ["$dob", false] },
@@ -1258,130 +1326,276 @@ const getPatients = async (req, res) => {
 };
 
 
+// const updateAppointmentStatus = async (req, res) => {
+//     return new Promise(async () => {
+//         try {
+//             const { reference_id, sender_id, status, message, notification_id } = req?.body
+//             const actorId = req.userDetails?._id;
+
+//             // 1. validate input
+//             if (!reference_id) {
+//                 return responseData.fail(res, "reference_id is required", 400);
+//             }
+//             if (!status || ![AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED].includes(status)) {
+//                 return responseData.fail(res, "Invalid status. Must be CONFIRMED or CANCELLED.", 400);
+//             }
+
+//             // 2. fetch appointment
+//             const appointment = await AppointmentSchema.findByIdAndUpdate(
+//                 reference_id,
+//                 { status }, // update only status
+//                 { new: true } // return updated doc
+//             );
+//             if (!appointment) {
+//                 return responseData.fail(res, "Appointment not found", 404);
+//             }
+
+//             // 3. update status
+
+
+//             // 4. mark original notification (if provided) as read/handled
+//             if (notification_id) {
+//                 try {
+//                     await NotificationSchema.findByIdAndUpdate(notification_id, { read: true });
+//                 } catch (err) {
+//                     logger.warn("Failed to mark original notification as read", err);
+//                 }
+//             }
+
+//             // 5. build recipients set
+//             // sender_id (from payload) is expected to be the original requester (patient/admin)
+//             // appointment.creator is authoritative fallback
+//             const recipients = new Set();
+//             if (sender_id) recipients.add(String(sender_id));
+//             if (appointment.creator) recipients.add(appointment.creator.toString());
+//             // remove actor (doctor) from recipients if present
+//             if (actorId) recipients.delete(String(actorId));
+
+//             const recipientsArr = Array.from(recipients);
+
+//             // 6. determine notification type and default message
+//             const notifType = status === AppointmentStatus.CONFIRMED
+//                 ? (NotificationType?.APPOINTMENT_CONFIRMED || "APPOINTMENT_CONFIRMED")
+//                 : (NotificationType?.APPOINTMENT_CANCELLED || NotificationType?.APPOINTMENT_DECLINED || "APPOINTMENT_CANCELLED");
+
+//             const appointmentDate = new Date(appointment.date);
+//             const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
+//             const formatTimeTo12Hour = (timeString) => {
+//                 const [hours, minutes] = timeString.split(':');
+//                 const hour = parseInt(hours);
+//                 const ampm = hour >= 12 ? 'PM' : 'AM';
+//                 const twelveHour = hour % 12 || 12;
+//                 return `${twelveHour}:${minutes} ${ampm}`;
+//             };
+//             const formattedStartTime = formatTimeTo12Hour(appointment.time_slot?.start);
+//             const formattedEndTime = formatTimeTo12Hour(appointment.time_slot?.end);
+//             const defaultMsg = status === AppointmentStatus.CONFIRMED
+//                 ? `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`
+//                 : `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been declined.`;
+//             // const defaultMsg = status === AppointmentStatus.CONFIRMED
+//             //     ? `Your appointment on ${appointment.date.toDateString()} (${appointment.time_slot?.start || ""} - ${appointment.time_slot?.end || ""}) has been confirmed.`
+//             //     : `Your appointment on ${appointment.date.toDateString()} (${appointment.time_slot?.start || ""} - ${appointment.time_slot?.end || ""}) has been declined.`;
+
+//             // 7. create notifications (one per user) and emit via socket if online
+//             const createdNotifications = [];
+//             const io = req.app?.get("socketio"); // your socket instance (may be undefined in some tests)
+
+//             for (const receiverId of recipientsArr) {
+//                 const notifPayload = {
+//                     sender_id: actorId || null,         // doctor who acted
+//                     receiver_id: receiverId,
+//                     type: notifType,
+//                     message: defaultMsg,
+//                     reference_id: appointment._id,
+//                     reference_model: "Appointment",
+//                     read: false,
+//                     reason: message
+//                 };
+
+//                 const created = await NotificationSchema.create(notifPayload);
+//                 createdNotifications.push(created);
+
+//                 const emitPayload = {
+//                     ...notifPayload,
+//                     _id: created._id,     // include DB id
+//                     createdAt: created.createdAt
+//                 };
+
+//                 // send realtime if socket info available
+//                 try {
+//                     // try to find socket record for receiver
+//                     const socketRec = await SocketSchema.findOne({ user_id: receiverId });
+
+//                     if (io && socketRec && socketRec.socket_id) {
+//                         // emit directly to that socket id (recommended in your setup)
+//                         io.to(socketRec.socket_id).emit("appointmentStatusUpdated", emitPayload);
+//                     } else if (io) {
+//                         // optional: if you also join user rooms (userId) you could do:
+//                         // io.to(String(receiverId)).emit(...)
+//                         // or skip if offline
+//                         logger.info(`Recipient ${receiverId} not connected via socket (socketRec missing). Notification saved to DB.`);
+//                     }
+//                 } catch (emitErr) {
+//                     logger.warn("Failed to emit socket notification", emitErr);
+//                 }
+//             }
+
+//             // 8. return result
+//             return responseData.success(res, { appointment, notified: recipientsArr }, messageConstants.DATA_SAVED_SUCCESSFULLY);
+
+
+//         } catch (error) {
+//             console.error("update appointment error:", error);
+//             return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+//         }
+//     })
+// }
+
 const updateAppointmentStatus = async (req, res) => {
-    return new Promise(async () => {
+  return new Promise(async () => {
+    try {
+      const { reference_id, sender_id, status, message, notification_id } = req?.body;
+      const actorId = req.userDetails?._id;
+
+      // 1️⃣ Validate inputs
+      if (!reference_id) {
+        return responseData.fail(res, "reference_id is required", 400);
+      }
+      if (
+        !status ||
+        ![
+          AppointmentStatus.CONFIRMED,
+          AppointmentStatus.CANCELLED,
+          AppointmentStatus.COMPLETED
+        ].includes(status)
+      ) {
+        return responseData.fail(
+          res,
+          "Invalid status. Must be CONFIRMED, CANCELLED or COMPLETED.",
+          400
+        );
+      }
+
+      // 2️⃣ Fetch and update appointment
+      const appointment = await AppointmentSchema.findById(reference_id);
+      if (!appointment) {
+        return responseData.fail(res, "Appointment not found", 404);
+      }
+
+      const oldStatus = appointment.status;
+      appointment.status = status;
+      await appointment.save();
+
+      // 3️⃣ Mark original notification as read if exists
+      if (notification_id) {
         try {
-            const { reference_id, sender_id, status, message, notification_id } = req?.body
-            const actorId = req.userDetails?._id;
-
-            // 1. validate input
-            if (!reference_id) {
-                return responseData.fail(res, "reference_id is required", 400);
-            }
-            if (!status || ![AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED].includes(status)) {
-                return responseData.fail(res, "Invalid status. Must be CONFIRMED or CANCELLED.", 400);
-            }
-
-            // 2. fetch appointment
-            const appointment = await AppointmentSchema.findByIdAndUpdate(
-                reference_id,
-                { status }, // update only status
-                { new: true } // return updated doc
-            );
-            if (!appointment) {
-                return responseData.fail(res, "Appointment not found", 404);
-            }
-
-            // 3. update status
-
-
-            // 4. mark original notification (if provided) as read/handled
-            if (notification_id) {
-                try {
-                    await NotificationSchema.findByIdAndUpdate(notification_id, { read: true });
-                } catch (err) {
-                    logger.warn("Failed to mark original notification as read", err);
-                }
-            }
-
-            // 5. build recipients set
-            // sender_id (from payload) is expected to be the original requester (patient/admin)
-            // appointment.creator is authoritative fallback
-            const recipients = new Set();
-            if (sender_id) recipients.add(String(sender_id));
-            if (appointment.creator) recipients.add(appointment.creator.toString());
-            // remove actor (doctor) from recipients if present
-            if (actorId) recipients.delete(String(actorId));
-
-            const recipientsArr = Array.from(recipients);
-
-            // 6. determine notification type and default message
-            const notifType = status === AppointmentStatus.CONFIRMED
-                ? (NotificationType?.APPOINTMENT_CONFIRMED || "APPOINTMENT_CONFIRMED")
-                : (NotificationType?.APPOINTMENT_CANCELLED || NotificationType?.APPOINTMENT_DECLINED || "APPOINTMENT_CANCELLED");
-
-            const appointmentDate = new Date(appointment.date);
-            const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
-            const formatTimeTo12Hour = (timeString) => {
-                const [hours, minutes] = timeString.split(':');
-                const hour = parseInt(hours);
-                const ampm = hour >= 12 ? 'PM' : 'AM';
-                const twelveHour = hour % 12 || 12;
-                return `${twelveHour}:${minutes} ${ampm}`;
-            };
-            const formattedStartTime = formatTimeTo12Hour(appointment.time_slot?.start);
-            const formattedEndTime = formatTimeTo12Hour(appointment.time_slot?.end);
-            const defaultMsg = status === AppointmentStatus.CONFIRMED
-                ? `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`
-                : `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been declined.`;
-            // const defaultMsg = status === AppointmentStatus.CONFIRMED
-            //     ? `Your appointment on ${appointment.date.toDateString()} (${appointment.time_slot?.start || ""} - ${appointment.time_slot?.end || ""}) has been confirmed.`
-            //     : `Your appointment on ${appointment.date.toDateString()} (${appointment.time_slot?.start || ""} - ${appointment.time_slot?.end || ""}) has been declined.`;
-
-            // 7. create notifications (one per user) and emit via socket if online
-            const createdNotifications = [];
-            const io = req.app?.get("socketio"); // your socket instance (may be undefined in some tests)
-
-            for (const receiverId of recipientsArr) {
-                const notifPayload = {
-                    sender_id: actorId || null,         // doctor who acted
-                    receiver_id: receiverId,
-                    type: notifType,
-                    message: defaultMsg,
-                    reference_id: appointment._id,
-                    reference_model: "Appointment",
-                    read: false,
-                    reason: message
-                };
-
-                const created = await NotificationSchema.create(notifPayload);
-                createdNotifications.push(created);
-
-                const emitPayload = {
-                    ...notifPayload,
-                    _id: created._id,     // include DB id
-                    createdAt: created.createdAt
-                };
-
-                // send realtime if socket info available
-                try {
-                    // try to find socket record for receiver
-                    const socketRec = await SocketSchema.findOne({ user_id: receiverId });
-
-                    if (io && socketRec && socketRec.socket_id) {
-                        // emit directly to that socket id (recommended in your setup)
-                        io.to(socketRec.socket_id).emit("appointmentStatusUpdated", emitPayload);
-                    } else if (io) {
-                        // optional: if you also join user rooms (userId) you could do:
-                        // io.to(String(receiverId)).emit(...)
-                        // or skip if offline
-                        logger.info(`Recipient ${receiverId} not connected via socket (socketRec missing). Notification saved to DB.`);
-                    }
-                } catch (emitErr) {
-                    logger.warn("Failed to emit socket notification", emitErr);
-                }
-            }
-
-            // 8. return result
-            return responseData.success(res, { appointment, notified: recipientsArr }, messageConstants.DATA_SAVED_SUCCESSFULLY);
-
-
-        } catch (error) {
-            console.error("update appointment error:", error);
-            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+          await NotificationSchema.findByIdAndUpdate(notification_id, { read: true });
+        } catch (err) {
+          logger.warn("Failed to mark original notification as read", err);
         }
-    })
-}
+      }
+
+      // 4️⃣ Determine if notification should be sent
+      let shouldNotify = false;
+      let notifType = "";
+      let defaultMsg = "";
+
+      const appointmentDate = new Date(appointment.date);
+      const formattedDate = `${String(appointmentDate.getDate()).padStart(2, "0")}/${String(
+        appointmentDate.getMonth() + 1
+      ).padStart(2, "0")}/${appointmentDate.getFullYear()}`;
+
+      const formatTimeTo12Hour = (timeString) => {
+        const [hours, minutes] = timeString.split(":");
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const twelveHour = hour % 12 || 12;
+        return `${twelveHour}:${minutes} ${ampm}`;
+      };
+
+      const formattedStartTime = formatTimeTo12Hour(appointment.time_slot?.start);
+      const formattedEndTime = formatTimeTo12Hour(appointment.time_slot?.end);
+
+      // ✅ CONFIRMED → CANCELLED
+      if (oldStatus === AppointmentStatus.CONFIRMED && status === AppointmentStatus.CANCELLED) {
+        shouldNotify = true;
+        notifType = NotificationType.APPOINTMENT_CANCELLED || "APPOINTMENT_CANCELLED";
+        defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been declined.`;
+      }
+
+      // ✅ CANCELLED → CONFIRMED
+      else if (oldStatus === AppointmentStatus.CANCELLED && status === AppointmentStatus.CONFIRMED) {
+        shouldNotify = true;
+        notifType = NotificationType.APPOINTMENT_CONFIRMED || "APPOINTMENT_CONFIRMED";
+        defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
+      }
+
+      // ⚠️ CONFIRMED → COMPLETED → No notification
+      else if (oldStatus === AppointmentStatus.CONFIRMED && status === AppointmentStatus.COMPLETED) {
+        shouldNotify = false;
+      }
+
+      // 5️⃣ Build recipients
+      const recipients = new Set();
+      if (sender_id) recipients.add(String(sender_id));
+      if (appointment.creator) recipients.add(appointment.creator.toString());
+      if (actorId) recipients.delete(String(actorId)); // remove doctor if same
+
+      const recipientsArr = Array.from(recipients);
+      const io = req.app?.get("socketio");
+
+      // 6️⃣ Send notification (only if needed)
+      if (shouldNotify) {
+        const createdNotifications = [];
+
+        for (const receiverId of recipientsArr) {
+          const notifPayload = {
+            sender_id: actorId || null,
+            receiver_id: receiverId,
+            type: notifType,
+            message: defaultMsg,
+            reference_id: appointment._id,
+            reference_model: "Appointment",
+            read: false,
+            reason: message,
+          };
+
+          const created = await NotificationSchema.create(notifPayload);
+          createdNotifications.push(created);
+
+          // emit via socket
+          try {
+            const socketRec = await SocketSchema.findOne({ user_id: receiverId });
+            if (io && socketRec && socketRec.socket_id) {
+              io.to(socketRec.socket_id).emit("appointmentStatusUpdated", {
+                ...notifPayload,
+                _id: created._id,
+                createdAt: created.createdAt,
+              });
+            } else if (io) {
+              logger.info(
+                `Recipient ${receiverId} not connected via socket. Notification saved to DB.`
+              );
+            }
+          } catch (emitErr) {
+            logger.warn("Failed to emit socket notification", emitErr);
+          }
+        }
+      }
+
+      // 7️⃣ Return response
+      return responseData.success(
+        res,
+        { appointment, notified: shouldNotify ? recipientsArr : [] },
+        messageConstants.DATA_SAVED_SUCCESSFULLY
+      );
+    } catch (error) {
+      console.error("update appointment error:", error);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+  });
+};
+
 
 const updateAppointment = async (req, res) => {
     return new Promise(async () => {
@@ -1450,7 +1664,7 @@ const updateAppointment = async (req, res) => {
             appointment.time_slot = newTimeSlot;
             appointment.visit_type = newVisitType;
             appointment.patient_id = newPatientId;
-            appointment.status = AppointmentStatus.PENDING; // reset until doctor confirms
+            appointment.status = AppointmentStatus.CONFIRMED; // reset until doctor confirms
             await appointment.save();
 
             console.log(newDate, ">> new Date ")

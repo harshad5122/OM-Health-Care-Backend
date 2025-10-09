@@ -31,9 +31,18 @@ const WeekDays = Object.freeze({
 });
 
 const AppointmentStatus = Object.freeze({
-    PENDING: "PENDING",
+    COMPLETED: "COMPLETED",
     CONFIRMED: "CONFIRMED",
     CANCELLED: "CANCELLED"
+});
+
+const PatientStatus = Object.freeze({
+    CONTINUE: "CONTINUE",
+    DISCONTINUE: "DISCONTINUE",
+    ALTERNATE: "ALTERNATE",
+    WEEKLY: "WEEKLY",
+    DISCHARGE: "DISCHARGE",
+    OBSERVATION: "OBSERVATION"
 });
 
 const leaveStatus = Object.freeze({
@@ -84,5 +93,6 @@ module.exports = {
     NotificationType,
     leaveStatus,
     leaveTypes,
-    leaveTypeTimes
+    leaveTypeTimes,
+    PatientStatus
 }

@@ -1091,9 +1091,18 @@ const getAppointmentList = async (req, res) => {
       };
     }
 
-     if (status) {
-        filter.status = status;
-      }
+    //  if (status) {
+    //     filter.status = status;
+    //   }
+    if (status) {
+  const statusArray = status.split(",").map((s) => s.trim());
+  if (statusArray.length === 1) {
+    filter.status = statusArray[0];
+  } else {
+    filter.status = { $in: statusArray };
+  }
+}
+
 
 
     const appointments = await AppointmentSchema.find(filter)
@@ -1259,15 +1268,27 @@ const getPatients = async (req, res) => {
         },
       },
 
+      // ...(patient_status
+      //     ? [
+      //         {
+      //           $match: {
+      //             patient_status: patient_status,
+      //           },
+      //         },
+      //       ]
+      //     : []),
       ...(patient_status
-          ? [
-              {
-                $match: {
-                  patient_status: patient_status,
-                },
-              },
-            ]
-          : []),
+  ? [
+      {
+        $match: {
+          patient_status: {
+            $in: patient_status.split(",").map((s) => s.trim()),
+          },
+        },
+      },
+    ]
+  : []),
+
       
 
       // Sort latest first

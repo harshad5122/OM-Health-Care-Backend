@@ -1,5 +1,5 @@
 const { UserRole } = require('../../constants');
-const { AppointmentStatus, NotificationType, leaveTypeTimes, PatientStatus } = require('../../constants/enum');
+const { AppointmentStatus, NotificationType, leaveTypeTimes, PatientStatus, leaveStatus } = require('../../constants/enum');
 const AppointmentSchema = require('../../models/appointment');
 const WeeklyScheduleSchema = require('../../models/weekly_schedule_pattern');
 const UserSchema = require('../../models/user');
@@ -46,7 +46,7 @@ const createAppointment = async (req, res) => {
             const formattedStartTime = formatTimeTo12Hour(time_slot?.start);
             const formattedEndTime = formatTimeTo12Hour(time_slot?.end);
 
-             const message = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
+            //  const message = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
              const patient = await UserSchema.findById(patient_id);
              const admins = await UserSchema.find({ role: UserRole.ADMIN });
 
@@ -55,11 +55,12 @@ const createAppointment = async (req, res) => {
 
             // Notify patient
       if (patient) {
+        const patientMessage = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed. Assigned doctor: Dr. ${doctor?.firstname} ${doctor?.lastname}.`;
         const notif = await NotificationSchema.create({
           sender_id: userDetails?._id,
           receiver_id: patient._id,
           type: NotificationType.APPOINTMENT_CONFIRMED,
-          message,
+          message: patientMessage,
           reference_id: appointment._id,
           reference_model: "Appointment",
           read: false
@@ -78,11 +79,14 @@ const createAppointment = async (req, res) => {
 
       //  Notify all admins
       for (const admin of admins) {
+
+        const adminMessage = `Appointment of ${patient?.firstname} ${patient?.lastname} on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed. Assigned doctor: Dr. ${doctor?.firstname} ${doctor?.lastname}.`;
+
         const notif = await NotificationSchema.create({
           sender_id: userDetails?._id,
           receiver_id: admin._id,
           type: NotificationType.APPOINTMENT_CONFIRMED,
-          message,
+          message: adminMessage,
           reference_id: appointment._id,
           reference_model: "Appointment",
           read: false
@@ -312,6 +316,8 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
             // Mark leaves that fall in range
             const leaveIntervals = [];
             leaves.forEach((leave) => {
+               // Skip cancelled leaves
+    if (leave.status === leaveStatus.CANCELLED) return;
                 const leaveStart = moment(leave.start_date).startOf("day");
                 const leaveEnd = moment(leave.end_date).endOf("day");
                 Object.keys(dayStatus).forEach((dateStr) => {
@@ -347,11 +353,7 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
 
                             });
                         }
-                        // dayStatus[dateStr].slots = {
-                        //     available: [],
-                        //     booked: [], // 👈 pass flag to preserve id
-                        // };
-
+                       
 
                     }
                 });
@@ -570,282 +572,8 @@ const getAppontmentByDoctor = async (req, res) => {
 
             const result = await structureAppointmentHelper(doctorId, from, to)
 
-            // // Build query — filter by date only if both from+to provided
-            // const query = { staff_id: doctorId, status: { $ne: AppointmentStatus?.CANCELLED } };
-            // let startDate, endDate;
-            // const hasRange = from && to;
-            // if (hasRange) {
-            //     startDate = moment(from).startOf("day");
-            //     endDate = moment(to).endOf("day");
-            //     if (!startDate.isValid() || !endDate.isValid()) {
-            //         return responseData.fail(res, "Invalid from/to dates", 400);
-            //     }
-            //     query.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
-            // }
-
-            // // Fetch data
-            // const [appointments, weeklySchedule, leaves] = await Promise.all([
-            //     AppointmentSchema.find(query).lean(),
-            //     WeeklyScheduleSchema.findOne({ staff_id: doctorId }).lean(),
-            //     StaffLeaveSchema.find({ staff_id: doctorId }).lean(),
-            // ]);
-
-            // // helper to get reliable date string from an appointment
-            // const getApptDateStr = (appt) => {
-            //     // prefer appt.date, fallback to createdAt
-            //     const dt = appt && (appt.date);
-            //     // if still falsy, return null so caller can decide
-            //     if (!dt) return null;
-            //     return moment(dt).format("YYYY-MM-DD");
-            // };
-
-            // const dayStatus = {};
-
-            // if (hasRange) {
-            //     // Build a day map for the requested range
-            //     let current = startDate.clone();
-            //     while (current.isSameOrBefore(endDate)) {
-            //         const dateStr = current.format("YYYY-MM-DD");
-            //         dayStatus[dateStr] = { date: dateStr, status: "unavailable", events: [] };
-            //         current.add(1, "day");
-            //     }
-
-            //     // Mark leaves that fall in range
-            //     leaves.forEach((leave) => {
-            //         const leaveStart = moment(leave.start).startOf("day");
-            //         const leaveEnd = moment(leave.end).endOf("day");
-            //         Object.keys(dayStatus).forEach((dateStr) => {
-            //             const d = moment(dateStr, "YYYY-MM-DD");
-            //             if (d.isBetween(leaveStart, leaveEnd, null, "[]")) {
-            //                 dayStatus[dateStr].status = "leave";
-            //                 dayStatus[dateStr].events.push({
-            //                     title: "Doctor on Leave",
-            //                     start: d.startOf("day").toDate(),
-            //                     end: d.endOf("day").toDate(),
-            //                     type: "leave",
-
-            //                 });
-            //             }
-            //         });
-            //     });
-
-
-
-            //     // Add appointments into correct day bucket using appt.date
-            //     appointments.forEach((appt) => {
-            //         const dateStr = getApptDateStr(appt); // guaranteed to be string or null
-            //         if (!dateStr) return; // skip malformed appt without date
-            //         if (!dayStatus[dateStr]) return; // appointment outside requested range
-            //         dayStatus[dateStr].events.push({
-            //             title: `${appt.time_slot?.start || ""}-${appt.time_slot?.end || ""}`,
-            //             start: appt.time_slot?.start, // you may convert to full Date when required by frontend
-            //             end: appt.time_slot?.end,
-            //             type: "booked",
-            //             status: appt?.status,
-            //             id: appt?._id,
-            //             visit_type: appt?.visit_type,
-            //             patient_id: appt?.patient_id
-            //         });
-            //         if (dayStatus[dateStr].status !== "leave") {
-            //             dayStatus[dateStr].status = "available";
-            //         }
-            //     });
-
-            //     // Apply weekly schedule marking if day has no events
-            //     // if (weeklySchedule) {
-            //     //     Object.keys(dayStatus).forEach((dateStr) => {
-            //     //         if (dayStatus[dateStr].status === "leave") return;
-            //     //         const dayOfWeek = moment(dateStr).format("dddd").toLowerCase(); // monday...
-            //     //         const slots = weeklySchedule[dayOfWeek];
-            //     //         if (slots && slots.length > 0 && dayStatus[dateStr].events.length === 0) {
-            //     //             dayStatus[dateStr].status = "available";
-            //     //         }
-            //     //     });
-            //     // }
-            //     if (weeklySchedule) {
-            //         Object.keys(dayStatus).forEach((dateStr) => {
-            //             if (dayStatus[dateStr].status === "leave") return;
-
-            //             const dayOfWeek = moment(dateStr).format("dddd").toUpperCase(); // e.g. "MONDAY"
-
-            //             const daySchedule = weeklySchedule.weekly_schedule.find(d => d.day === dayOfWeek);
-            //             const slots = daySchedule ? daySchedule.time_slots : [];
-
-            //             //     if (slots && slots.length > 0) {
-            //             //         if (dayStatus[dateStr].events.length === 0) {
-            //             //             // No appointments → available
-            //             //             dayStatus[dateStr].status = "available";
-            //             //         } else {
-            //             //             // Some appointments exist → check if fully booked
-            //             //             if (isFullyBooked(slots, dayStatus[dateStr].events)) {
-            //             //                 dayStatus[dateStr].status = "unavailable"; // fully booked
-            //             //             } else {
-            //             //                 dayStatus[dateStr].status = "available"; // still has free slots
-            //             //             }
-            //             //         }
-            //             //     }
-            //             // });
-            //             // const booked = dayStatus[dateStr].events
-            //             //     .filter(e => e.type === "booked")
-            //             //     .map(e => [toMinutes(e.start),
-            //             //     toMinutes(e.end)
-            //             //     ]);
-
-            //             // const mergedBooked = mergeIntervals(booked);
-
-            //             // // Subtract booked from schedule
-
-
-
-            //             // const scheduleIntervals = normalizeSchedule(slots);
-            //             // const available = subtractIntervals(scheduleIntervals, mergedBooked);
-
-            //             // dayStatus[dateStr].slots = {
-            //             //     available: formatSlots(available),
-            //             //     booked: formatSlots(mergedBooked),
-            //             // };
-
-
-            //             const booked = dayStatus[dateStr].events
-            //                 .filter(e => e.type === "booked")
-            //                 .map(e => ({
-            //                     id: e.id, // store appointment id
-            //                     start: toMinutes(e.start),
-            //                     end: toMinutes(e.end),
-            //                 }));
-            //             // Merge only time ranges, but keep mapping back ids
-            //             const mergedBooked = mergeIntervals(
-            //                 booked.map(b => [b.start, b.end])
-            //             ).map(interval => {
-            //                 // Keep ids for intervals that overlap
-            //                 const overlappingIds = booked
-            //                     .filter(b => !(interval[1] <= b.start || interval[0] >= b.end))
-            //                     .map(b => b.id);
-
-            //                 return {
-            //                     id: overlappingIds.length === 1 ? overlappingIds[0] : overlappingIds, // array if merged
-            //                     start: interval[0],
-            //                     end: interval[1],
-            //                 };
-            //             });
-
-            //             const scheduleIntervals = normalizeSchedule(slots);
-
-            //             const available = subtractIntervals(
-            //                 scheduleIntervals,
-            //                 mergedBooked.map(b => [b.start, b.end])
-            //             );
-
-            //             dayStatus[dateStr].slots = {
-            //                 available: formatSlots(available),
-            //                 booked: formatSlots(mergedBooked?.map(e => [e?.start, e?.end, e?.id]), true), // 👈 pass flag to preserve id
-            //             };
-
-
-            //             if (available.length === 0 && booked.length > 0) {
-            //                 dayStatus[dateStr].status = "unavailable"; // fully booked
-            //             } else if (available.length > 0) {
-            //                 dayStatus[dateStr].status = "available";
-            //             }
-            //         });
-            //     }
-
             return responseData.success(res, result, messageConstants.FETCHED_SUCCESSFULLY);
-            // } else {
-            //     // NO range provided -> group ALL appointments by appointment date
-            //     appointments.forEach((appt) => {
-            //         const dateStr = getApptDateStr(appt) || moment(appt.createdAt || appt.created_at || new Date()).format("YYYY-MM-DD");
-            //         if (!dayStatus[dateStr]) {
-            //             dayStatus[dateStr] = { date: dateStr, status: "unavailable", events: [] };
-            //         }
-            //         dayStatus[dateStr].events.push({
-            //             // title: `Booked - ${appt.patientName || appt.patient_name || "Patient"}`,
-            //             title: `${appt.time_slot?.start || ""}-${appt.time_slot?.end || ""}`,
-            //             start: appt.time_slot?.start,
-            //             end: appt.time_slot?.end,
-            //             type: "booked",
-            //             status: appt?.status,
-            //             id: appt?._id,
-            //             visit_type: appt?.visit_type,
-            //             patient_id: appt?.patient_id
-            //         });
-            //         if (dayStatus[dateStr].status !== "leave") {
-            //             dayStatus[dateStr].status = "available";
-            //         }
-            //     });
-
-            //     // Apply weekly schedule (mark available days)
-
-            //     if (weeklySchedule) {
-            //         Object.keys(dayStatus).forEach((dateStr) => {
-            //             if (dayStatus[dateStr].status === "leave") return;
-
-            //             const dayOfWeek = moment(dateStr).format("dddd").toUpperCase(); // e.g. "MONDAY"
-
-            //             const daySchedule = weeklySchedule.weekly_schedule.find(d => d.day === dayOfWeek);
-            //             const slots = daySchedule ? daySchedule.time_slots : [];
-
-            //             //     if (slots && slots.length > 0) {
-            //             //         if (dayStatus[dateStr].events.length === 0) {
-            //             //             // No appointments → available
-            //             //             dayStatus[dateStr].status = "available";
-            //             //         } else {
-            //             //             // Some appointments exist → check if fully booked
-            //             //             if (isFullyBooked(slots, dayStatus[dateStr].events)) {
-            //             //                 dayStatus[dateStr].status = "unavailable"; // fully booked
-            //             //             } else {
-            //             //                 dayStatus[dateStr].status = "available"; // still has free slots
-            //             //             }
-            //             //         }
-            //             //     }
-            //             // });
-            //             const booked = dayStatus[dateStr].events
-            //                 .filter(e => e.type === "booked")
-            //                 .map(e => [toMinutes(e.start), toMinutes(e.end)]);
-
-            //             const mergedBooked = mergeIntervals(booked);
-
-            //             // Subtract booked from schedule
-
-
-
-            //             const scheduleIntervals = normalizeSchedule(slots);
-            //             const available = subtractIntervals(scheduleIntervals, mergedBooked);
-
-            //             dayStatus[dateStr].slots = {
-            //                 available: formatSlots(available),
-            //                 booked: formatSlots(mergedBooked),
-            //             };
-
-            //             if (available.length === 0 && booked.length > 0) {
-            //                 dayStatus[dateStr].status = "unavailable"; // fully booked
-            //             } else if (available.length > 0) {
-            //                 dayStatus[dateStr].status = "available";
-            //             }
-            //         });
-            //     }
-
-
-            //     // mark leaves for any matching appointment days (optional)
-            //     leaves.forEach((leave) => {
-            //         const leaveStart = moment(leave.start).startOf("day");
-            //         const leaveEnd = moment(leave.end).endOf("day");
-            //         Object.keys(dayStatus).forEach((dateStr) => {
-            //             const d = moment(dateStr, "YYYY-MM-DD");
-            //             if (d.isBetween(leaveStart, leaveEnd, null, "[]")) {
-            //                 dayStatus[dateStr].status = "leave";
-            //                 dayStatus[dateStr].events.unshift({
-            //                     title: "Doctor on Leave",
-            //                     start: d.startOf("day").toDate(),
-            //                     end: d.endOf("day").toDate(),
-            //                     type: "leave",
-            //                 });
-            //             }
-            //         });
-            //     });
-
-            //     return responseData.success(res, Object.values(dayStatus), messageConstants.FETCHED_SUCCESSFULLY);
-            // }
+        
         } catch (error) {
             console.error("getAppointmentByDoctor error:", error);
             return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);

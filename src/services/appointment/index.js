@@ -1124,6 +1124,7 @@ const getAppointmentList = async (req, res) => {
         time_slot: apt.time_slot,
         visit_type: apt.visit_type,
         status: apt.status,
+        message: apt.message || "",
         created_by: apt.created_by,
         creator: apt.creator,
         createdAt: apt.createdAt,
@@ -1264,7 +1265,7 @@ const getPatients = async (req, res) => {
       {
         $addFields: {
           patient_status: { $arrayElemAt: ["$appointments.patient_status", 0] },
-          message: { $arrayElemAt: ["$appointments.message", 0] },
+          patient_message: { $arrayElemAt: ["$appointments.patient_message", 0] },
           visit_count: { $size: "$appointments" },
         },
       },
@@ -1313,7 +1314,7 @@ const getPatients = async (req, res) => {
           gender: 1,
           assign_doctor: 1,
           patient_status: 1,
-          message: 1,
+          patient_message: 1,
           dob: {
             $cond: {
               if: { $ifNull: ["$dob", false] },
@@ -1523,6 +1524,7 @@ const updateAppointmentStatus = async (req, res) => {
 
       const oldStatus = appointment.status;
       appointment.status = status;
+      appointment.message = message || "";
       await appointment.save();
 
       // 3️⃣ Mark original notification as read if exists
@@ -1803,7 +1805,7 @@ const updatePatientStatus = async (req, res) => {
         {
           $set: {
             patient_status,
-            message: message || "",
+            patient_message: message || "",
           },
         }
       );

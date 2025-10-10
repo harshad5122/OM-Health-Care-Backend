@@ -21,6 +21,10 @@ const AppointmentSchema = new mongoose.Schema(
             enum: Object.values(PatientStatus),
             default: PatientStatus.CONTINUE
         },
+        message: {
+            type: String,
+            default: "", 
+        },
         created_by: {
             type: String,
             enum: ["ADMIN", "DOCTOR"]

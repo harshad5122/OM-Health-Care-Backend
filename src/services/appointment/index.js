@@ -1264,6 +1264,7 @@ const getPatients = async (req, res) => {
       {
         $addFields: {
           patient_status: { $arrayElemAt: ["$appointments.patient_status", 0] },
+          message: { $arrayElemAt: ["$appointments.message", 0] },
           visit_count: { $size: "$appointments" },
         },
       },
@@ -1312,6 +1313,7 @@ const getPatients = async (req, res) => {
           gender: 1,
           assign_doctor: 1,
           patient_status: 1,
+          message: 1,
           dob: {
             $cond: {
               if: { $ifNull: ["$dob", false] },
@@ -1797,7 +1799,13 @@ const updatePatientStatus = async (req, res) => {
       // Update patient_status in all appointments for this patient
       const result = await AppointmentSchema.updateMany(
         { patient_id: patientId },
-        { patient_status }
+        // { patient_status }
+        {
+          $set: {
+            patient_status,
+            message: message || "",
+          },
+        }
       );
 
       if (!result || result.matchedCount === 0) {

@@ -381,17 +381,7 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
                 }
             });
 
-            // Apply weekly schedule marking if day has no events
-            // if (weeklySchedule) {
-            //     Object.keys(dayStatus).forEach((dateStr) => {
-            //         if (dayStatus[dateStr].status === "leave") return;
-            //         const dayOfWeek = moment(dateStr).format("dddd").toLowerCase(); // monday...
-            //         const slots = weeklySchedule[dayOfWeek];
-            //         if (slots && slots.length > 0 && dayStatus[dateStr].events.length === 0) {
-            //             dayStatus[dateStr].status = "available";
-            //         }
-            //     });
-            // }
+            
             if (weeklySchedule) {
                 Object.keys(dayStatus).forEach((dateStr) => {
                     // if (dayStatus[dateStr].status === "leave") return;
@@ -401,40 +391,7 @@ const structureAppointmentHelper = async (doctorId, from, to) => {
                     const daySchedule = weeklySchedule.weekly_schedule.find(d => d.day === dayOfWeek);
                     const slots = daySchedule ? daySchedule.time_slots : [];
 
-                    //     if (slots && slots.length > 0) {
-                    //         if (dayStatus[dateStr].events.length === 0) {
-                    //             // No appointments → available
-                    //             dayStatus[dateStr].status = "available";
-                    //         } else {
-                    //             // Some appointments exist → check if fully booked
-                    //             if (isFullyBooked(slots, dayStatus[dateStr].events)) {
-                    //                 dayStatus[dateStr].status = "unavailable"; // fully booked
-                    //             } else {
-                    //                 dayStatus[dateStr].status = "available"; // still has free slots
-                    //             }
-                    //         }
-                    //     }
-                    // });
-                    // const booked = dayStatus[dateStr].events
-                    //     .filter(e => e.type === "booked")
-                    //     .map(e => [toMinutes(e.start),
-                    //     toMinutes(e.end)
-                    //     ]);
-
-                    // const mergedBooked = mergeIntervals(booked);
-
-                    // // Subtract booked from schedule
-
-
-
-                    // const scheduleIntervals = normalizeSchedule(slots);
-                    // const available = subtractIntervals(scheduleIntervals, mergedBooked);
-
-                    // dayStatus[dateStr].slots = {
-                    //     available: formatSlots(available),
-                    //     booked: formatSlots(mergedBooked),
-                    // };
-
+                  
 
                     const booked = dayStatus[dateStr].events
                         .filter(e => e.type === "booked")
@@ -1211,6 +1168,11 @@ const getPatients = async (req, res) => {
       match.created_at = dateFilter;
     }
 
+      // 🔹 Filter by assigned doctor
+      if (doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)) {
+        match.assign_doctor = new mongoose.Types.ObjectId(doctor_id);
+      }
+
     // 🔹 Aggregation pipeline
     const pipeline = [
       { $match: match },
@@ -1226,6 +1188,9 @@ const getPatients = async (req, res) => {
                 $expr: {
                   $eq: ["$patient_id", "$$patientId"],
                 },
+                ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
+                    ? { staff_id: new mongoose.Types.ObjectId(doctor_id) }
+                    : {}),
               },
             },
             { $sort: { createdAt: -1 } },
@@ -1234,32 +1199,32 @@ const getPatients = async (req, res) => {
         },
       },
 
-      // Filter only those who have appointments with selected doctor (if doctor_id provided)
-      ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
-        ? [
-            {
-              $addFields: {
-                appointments: {
-                  $filter: {
-                    input: "$appointments",
-                    as: "appt",
-                    cond: {
-                      $eq: [
-                        "$$appt.staff_id",
-                        new mongoose.Types.ObjectId(doctor_id),
-                      ],
-                    },
-                  },
-                },
-              },
-            },
-            {
-              $match: {
-                "appointments.0": { $exists: true }, // keep only patients having at least 1 appointment with this doctor
-              },
-            },
-          ]
-        : []),
+      // // Filter only those who have appointments with selected doctor (if doctor_id provided)
+      // ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
+      //   ? [
+      //       {
+      //         $addFields: {
+      //           appointments: {
+      //             $filter: {
+      //               input: "$appointments",
+      //               as: "appt",
+      //               cond: {
+      //                 $eq: [
+      //                   "$$appt.staff_id",
+      //                   new mongoose.Types.ObjectId(doctor_id),
+      //                 ],
+      //               },
+      //             },
+      //           },
+      //         },
+      //       },
+      //       {
+      //         $match: {
+      //           "appointments.0": { $exists: true }, // keep only patients having at least 1 appointment with this doctor
+      //         },
+      //       },
+      //     ]
+      //   : []),
 
       // Add visit_count field
       {
@@ -1330,18 +1295,20 @@ const getPatients = async (req, res) => {
     // Execute aggregation and count
     const [patients, totalCount] = await Promise.all([
       UserSchema.aggregate(pipeline),
+      UserSchema.countDocuments(match),
       // Count total unique patients matching filters
-      doctor_id
-        ? AppointmentSchema.aggregate([
-            {
-              $match: {
-                staff_id: new mongoose.Types.ObjectId(doctor_id),
-              },
-            },
-            { $group: { _id: "$patient_id" } },
-            { $count: "count" },
-          ]).then((r) => (r[0]?.count || 0))
-        : UserSchema.countDocuments(match),
+
+      // doctor_id
+      //   ? AppointmentSchema.aggregate([
+      //       {
+      //         $match: {
+      //           staff_id: new mongoose.Types.ObjectId(doctor_id),
+      //         },
+      //       },
+      //       { $group: { _id: "$patient_id" } },
+      //       { $count: "count" },
+      //     ]).then((r) => (r[0]?.count || 0))
+      //   : UserSchema.countDocuments(match),
     ]);
 
     return responseData.success(

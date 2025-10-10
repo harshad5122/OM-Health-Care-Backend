@@ -12,49 +12,50 @@ const NotificationSchema = require('../../models/notification')
 const SocketSchema = require('../../models/socket')
 const { UserTypes } = require('../../constants');
 const mongoose = require("mongoose");
+const { sendWhatsAppMessage } = require('../../utils/whatsapp');
 
 const createAppointment = async (req, res) => {
-    return new Promise(async () => {
-        try {
-            const { patient_id, staff_id, date, time_slot, visit_type, patient_name } = req?.body
-            const userDetails = req.userDetails
+  return new Promise(async () => {
+    try {
+      const { patient_id, staff_id, date, time_slot, visit_type, patient_name } = req?.body
+      const userDetails = req.userDetails
 
-            const payload = {
-                patient_id,
-                staff_id,
-                date,
-                time_slot,
-                visit_type,
-                created_by: userDetails?.role == UserRole.ADMIN ? "ADMIN" : "DOCTOR",
-                status: AppointmentStatus?.CONFIRMED,
-                patient_status: PatientStatus.CONTINUE,
-                creator: userDetails?._id
-            }
-            // const appointment = await AppointmentSchema?.create({ ...payload });
-            const appointment = await AppointmentSchema.create(payload);
-            const user = await UserSchema?.findOne({ staff_id });
+      const payload = {
+        patient_id,
+        staff_id,
+        date,
+        time_slot,
+        visit_type,
+        created_by: userDetails?.role == UserRole.ADMIN ? "ADMIN" : "DOCTOR",
+        status: AppointmentStatus?.CONFIRMED,
+        patient_status: PatientStatus.CONTINUE,
+        creator: userDetails?._id
+      }
+      // const appointment = await AppointmentSchema?.create({ ...payload });
+      const appointment = await AppointmentSchema.create(payload);
+      const user = await UserSchema?.findOne({ staff_id });
 
-            const appointmentDate = new Date(date);
-            const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
-            const formatTimeTo12Hour = (timeString) => {
-                const [hours, minutes] = timeString.split(':');
-                const hour = parseInt(hours);
-                const ampm = hour >= 12 ? 'PM' : 'AM';
-                const twelveHour = hour % 12 || 12;
-                return `${twelveHour}:${minutes} ${ampm}`;
-            };
-            const formattedStartTime = formatTimeTo12Hour(time_slot?.start);
-            const formattedEndTime = formatTimeTo12Hour(time_slot?.end);
+      const appointmentDate = new Date(date);
+      const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
+      const formatTimeTo12Hour = (timeString) => {
+        const [hours, minutes] = timeString.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const twelveHour = hour % 12 || 12;
+        return `${twelveHour}:${minutes} ${ampm}`;
+      };
+      const formattedStartTime = formatTimeTo12Hour(time_slot?.start);
+      const formattedEndTime = formatTimeTo12Hour(time_slot?.end);
 
-            //  const message = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
-             const patient = await UserSchema.findById(patient_id);
-             const doctor = await StaffSchema.findById(staff_id);
-             const admins = await UserSchema.find({ role: UserRole.ADMIN });
+      //  const message = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
+      const patient = await UserSchema.findById(patient_id);
+      const doctor = await StaffSchema.findById(staff_id);
+      const admins = await UserSchema.find({ role: UserRole.ADMIN });
 
-             const io = req.app.get('socketio');
-            const notifications = [];
+      const io = req.app.get('socketio');
+      const notifications = [];
 
-            // Notify patient
+      // Notify patient
       if (patient) {
         const patientMessage = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed. Assigned doctor: Dr. ${doctor?.firstname} ${doctor?.lastname}.`;
         const notif = await NotificationSchema.create({
@@ -75,6 +76,19 @@ const createAppointment = async (req, res) => {
             ...notif.toObject(),
             createdAt: notif.createdAt
           });
+        }
+
+        if (patient.phone) {
+          const templateParams = [
+            patient.firstname, // Corresponds to {{1}} in the template
+            formattedDate, // Corresponds to {{2}}
+            `${formattedStartTime} - ${formattedEndTime}`, // Corresponds to {{3}}
+            visit_type, // Corresponds to {{4}}
+            `${doctor?.firstname} ${doctor?.lastname}` // Corresponds to {{5}}
+          ];
+
+          // Call the function with the new template name and parameters
+          await sendWhatsAppMessage(patient.phone, "appointment_confirmation", templateParams);
         }
       }
 
@@ -104,68 +118,31 @@ const createAppointment = async (req, res) => {
       }
 
 
+      logger.info(
+        "Appointment created successfully",
+        { appointment: appointment?._id }
+      );
 
 
-
-
-//             const notification = await NotificationSchema.create({
-//                 sender_id: patient_id,
-//                 receiver_id: user?._id,
-//                 type: NotificationType.APPOINTMENT_REQUEST,
-//                 // message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
-//                 message: `New appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
-//                 reference_id: appointment._id,
-//                 reference_model: "Appointment",
-//                 read: false
-//             });
-//             // const io = req.app.get('socketio');
-
-//             const doctorSocket = await SocketSchema.findOne({ user_id: user._id });
-
-//             if (doctorSocket && doctorSocket.socket_id) {
-//             io.to(`${doctorSocket.socket_id}`).emit("appointmentRequest", {
-//                 _id: notification?._id,
-//                 sender_id: patient_id,
-//                 receiver_id: user?._id,
-//                 type: NotificationType.APPOINTMENT_REQUEST,
-//                 // message: `New appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
-//                 message: `New appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
-//                 reference_id: appointment._id,
-//                 reference_model: "Appointment",
-//                 read: false
-//             });
-//             } else {
-//             console.warn(` Doctor ${user?._id} not connected to socket. Notification saved to DB only.`);
-// }
-
-
-         
-
-            logger.info(
-                "Appointment created successfully",
-                { appointment: appointment?._id }
-            );
-
-
-            return responseData.success(
-                res,
-                // appointment, 
-                  {
+      return responseData.success(
+        res,
+        // appointment, 
+        {
           ...appointment.toObject(),
           patient_status: appointment.patient_status
         },
-                messageConstants.DATA_SAVED_SUCCESSFULLY
-            );
-        } catch (error) {
-            console.error(error);
-            logger.error("Create appointment " + messageConstants.INTERNAL_SERVER_ERROR, error);
-            return responseData.fail(
-                res,
-                messageConstants.INTERNAL_SERVER_ERROR,
-                500
-            );
-        }
-    });
+        messageConstants.DATA_SAVED_SUCCESSFULLY
+      );
+    } catch (error) {
+      console.error(error);
+      logger.error("Create appointment " + messageConstants.INTERNAL_SERVER_ERROR, error);
+      return responseData.fail(
+        res,
+        messageConstants.INTERNAL_SERVER_ERROR,
+        500
+      );
+    }
+  });
 };
 
 // Helper to check if all slots for a day are booked
@@ -174,44 +151,44 @@ const createAppointment = async (req, res) => {
 
 // Split schedule slots into intervals [startMin, endMin]
 const normalizeSlots = (slots) => {
-    return slots.map(s => [toMinutes(s.start), toMinutes(s.end)]);
+  return slots.map(s => [toMinutes(s.start), toMinutes(s.end)]);
 };
 
 // Merge overlapping/adjacent intervals
 const mergeIntervals = (intervals) => {
-    if (!intervals.length) return [];
-    intervals.sort((a, b) => a[0] - b[0]);
-    const merged = [intervals[0]];
-    for (let i = 1; i < intervals.length; i++) {
-        const [start, end] = intervals[i];
-        const last = merged[merged.length - 1];
-        if (start <= last[1]) {
-            last[1] = Math.max(last[1], end);
-        } else {
-            merged.push([start, end]);
-        }
+  if (!intervals.length) return [];
+  intervals.sort((a, b) => a[0] - b[0]);
+  const merged = [intervals[0]];
+  for (let i = 1; i < intervals.length; i++) {
+    const [start, end] = intervals[i];
+    const last = merged[merged.length - 1];
+    if (start <= last[1]) {
+      last[1] = Math.max(last[1], end);
+    } else {
+      merged.push([start, end]);
     }
-    return merged;
+  }
+  return merged;
 };
 
 function mergeSlots(slots) {
-    slots.sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+  slots.sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
 
-    const merged = [];
-    let current = slots[0];
+  const merged = [];
+  let current = slots[0];
 
-    for (let i = 1; i < slots.length; i++) {
-        const next = slots[i];
-        if (toMinutes(next.start) <= toMinutes(current.end)) {
-            // overlapping or continuous → merge
-            current.end = next.end > current.end ? next.end : current.end;
-        } else {
-            merged.push(current);
-            current = next;
-        }
+  for (let i = 1; i < slots.length; i++) {
+    const next = slots[i];
+    if (toMinutes(next.start) <= toMinutes(current.end)) {
+      // overlapping or continuous → merge
+      current.end = next.end > current.end ? next.end : current.end;
+    } else {
+      merged.push(current);
+      current = next;
     }
-    merged.push(current);
-    return merged;
+  }
+  merged.push(current);
+  return merged;
 }
 
 
@@ -220,367 +197,367 @@ function mergeSlots(slots) {
 
 // Subtract booked intervals from schedule
 const subtractIntervals = (schedule, booked) => {
-    let available = [...schedule];
-    for (const [bStart, bEnd] of booked) {
-        const newAvailable = [];
-        for (const [sStart, sEnd] of available) {
-            if (bEnd <= sStart || bStart >= sEnd) {
-                // no overlap
-                newAvailable.push([sStart, sEnd]);
-            } else {
-                if (bStart > sStart) newAvailable.push([sStart, bStart]);
-                if (bEnd < sEnd) newAvailable.push([bEnd, sEnd]);
-            }
-        }
-        available = newAvailable;
+  let available = [...schedule];
+  for (const [bStart, bEnd] of booked) {
+    const newAvailable = [];
+    for (const [sStart, sEnd] of available) {
+      if (bEnd <= sStart || bStart >= sEnd) {
+        // no overlap
+        newAvailable.push([sStart, sEnd]);
+      } else {
+        if (bStart > sStart) newAvailable.push([sStart, bStart]);
+        if (bEnd < sEnd) newAvailable.push([bEnd, sEnd]);
+      }
     }
-    return available;
+    available = newAvailable;
+  }
+  return available;
 };
 
 // Convert minutes back to HH:mm
 const formatSlots = (intervals, withId = false) => {
-    return intervals.map(([start, end, id]) => ({
-        start: moment().startOf("day").add(start, "minutes").format("HH:mm"),
-        end: moment().startOf("day").add(end, "minutes").format("HH:mm"),
-        id: id
-    }));
+  return intervals.map(([start, end, id]) => ({
+    start: moment().startOf("day").add(start, "minutes").format("HH:mm"),
+    end: moment().startOf("day").add(end, "minutes").format("HH:mm"),
+    id: id
+  }));
 };
 
 
 const normalizeSchedule = (slots) => {
-    return slots.map(slot => [toMinutes(slot.start), toMinutes(slot.end)]);
+  return slots.map(slot => [toMinutes(slot.start), toMinutes(slot.end)]);
 };
 
 const toMinutes = (time) => {
-    const [h, m] = time.split(":").map(Number);
-    return h * 60 + m;
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
 };
 
 // Merges old appointment slot into available slots for validation
 const buildEffectiveSlots = (allBookings, oldAppointment) => {
-    const matchingSlot = allBookings.find((slot) => slot.date === oldAppointment.date.toISOString().split("T")[0]);
+  const matchingSlot = allBookings.find((slot) => slot.date === oldAppointment.date.toISOString().split("T")[0]);
 
-    if (!matchingSlot) return [];
+  if (!matchingSlot) return [];
 
-    let effectiveAvailable = [...(matchingSlot.slots?.available || [])];
+  let effectiveAvailable = [...(matchingSlot.slots?.available || [])];
 
-    // add old appointment back to available pool
-    effectiveAvailable.push(oldAppointment.time_slot);
+  // add old appointment back to available pool
+  effectiveAvailable.push(oldAppointment.time_slot);
 
-    return effectiveAvailable;
+  return effectiveAvailable;
 };
 
 const structureAppointmentHelper = async (doctorId, from, to) => {
-    try {
+  try {
 
-        // Build query — filter by date only if both from+to provided
-        const query = { staff_id: doctorId, status: { $nin: [AppointmentStatus?.CANCELLED, AppointmentStatus?.COMPLETED] } };
-        let startDate, endDate;
-        const hasRange = from && to;
-        if (hasRange) {
-            startDate = moment(from).startOf("day");
-            endDate = moment(to).endOf("day");
-            if (!startDate.isValid() || !endDate.isValid()) {
-                return responseData.fail(res, "Invalid from/to dates", 400);
-            }
-            query.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
-        }
-
-        // Fetch data
-        const [appointments, weeklySchedule, leaves] = await Promise.all([
-            AppointmentSchema.find(query).lean(),
-            WeeklyScheduleSchema.findOne({ staff_id: doctorId }).lean(),
-            StaffLeaveSchema.find({ staff_id: doctorId }).lean(),
-        ]);
-
-        // helper to get reliable date string from an appointment
-        const getApptDateStr = (appt) => {
-            // prefer appt.date, fallback to createdAt
-            const dt = appt && (appt.date);
-            // if still falsy, return null so caller can decide
-            if (!dt) return null;
-            return moment(dt).format("YYYY-MM-DD");
-        };
-
-        const dayStatus = {};
-
-        if (hasRange) {
-            // Build a day map for the requested range
-            let current = startDate.clone();
-            while (current.isSameOrBefore(endDate)) {
-                const dateStr = current.format("YYYY-MM-DD");
-                dayStatus[dateStr] = { date: dateStr, status: "unavailable", events: [] };
-                current.add(1, "day");
-            }
-
-
-            // Mark leaves that fall in range
-            const leaveIntervals = [];
-            leaves.forEach((leave) => {
-               // Skip cancelled leaves
-    if (leave.status === leaveStatus.CANCELLED) return;
-                const leaveStart = moment(leave.start_date).startOf("day");
-                const leaveEnd = moment(leave.end_date).endOf("day");
-                Object.keys(dayStatus).forEach((dateStr) => {
-                    const d = moment(dateStr, "YYYY-MM-DD");
-                    if (d.isBetween(leaveStart, leaveEnd, null, "[]")) {
-                        dayStatus[dateStr].status = "leave";
-
-                        if (moment(d).isBetween(leaveStart, leaveEnd, null, "[]")) {
-                            let startTime, endTime;
-
-                            if (leave.leave_type === "CUSTOM") {
-                                startTime = leave.start_time || "00:00";
-                                endTime = leave.end_time || "23:59";
-                            } else {
-                                const times = leaveTypeTimes[leave.leave_type] || leaveTypeTimes.FULL_DAY;
-                                startTime = times.start;
-                                endTime = times.end;
-                            }
-
-                            leaveIntervals.push([toMinutes(startTime), toMinutes(endTime)]);
-
-
-
-                            dayStatus[dateStr].events.push({
-                                title: "Doctor on Leave",
-                                start_date: leave.start_date,
-                                end_date: leave.start_date,
-                                start: startTime,
-                                end: endTime,
-                                full_day: leave.full_day,
-                                status: leave?.status,
-                                type: "leave",
-
-                            });
-                        }
-                       
-
-                    }
-                });
-            });
-
-
-
-            // Add appointments into correct day bucket using appt.date
-            appointments.forEach((appt) => {
-                const dateStr = getApptDateStr(appt); // guaranteed to be string or null
-                if (!dateStr) return; // skip malformed appt without date
-                if (!dayStatus[dateStr]) return; // appointment outside requested range
-                dayStatus[dateStr].events.push({
-                    title: `${appt.time_slot?.start || ""}-${appt.time_slot?.end || ""}`,
-                    start: appt.time_slot?.start, // you may convert to full Date when required by frontend
-                    end: appt.time_slot?.end,
-                    type: "booked",
-                    status: appt?.status,
-                    id: appt?._id,
-                    visit_type: appt?.visit_type,
-                    patient_id: appt?.patient_id,
-                    creator:appt?.creator,
-                    created_by:appt?.created_by
-                });
-                if (dayStatus[dateStr].status !== "leave") {
-                    dayStatus[dateStr].status = "available";
-                }
-            });
-
-            
-            if (weeklySchedule) {
-                Object.keys(dayStatus).forEach((dateStr) => {
-                    // if (dayStatus[dateStr].status === "leave") return;
-
-                    const dayOfWeek = moment(dateStr).format("dddd").toUpperCase(); // e.g. "MONDAY"
-
-                    const daySchedule = weeklySchedule.weekly_schedule.find(d => d.day === dayOfWeek);
-                    const slots = daySchedule ? daySchedule.time_slots : [];
-
-                  
-
-                    const booked = dayStatus[dateStr].events
-                        .filter(e => e.type === "booked")
-                        .map(e => ({
-                            id: e.id, // store appointment id
-                            start: toMinutes(e.start),
-                            end: toMinutes(e.end),
-                        }));
-
-                    const leaves = dayStatus[dateStr].events
-                        .filter(e => e.type === "leave")
-                        .map(e => ({
-                            id: e.id || null,
-                            start: toMinutes(e.start),
-                            end: toMinutes(e.end),
-                        }));
-                    // Merge only time ranges, but keep mapping back ids
-                    const mergedBooked = mergeIntervals(
-                        booked.map(b => [b.start, b.end])
-                    ).map(interval => {
-                        // Keep ids for intervals that overlap
-                        const overlappingIds = booked
-                            .filter(b => !(interval[1] <= b.start || interval[0] >= b.end))
-                            .map(b => b.id);
-
-                        return {
-                            id: overlappingIds.length === 1 ? overlappingIds[0] : overlappingIds, // array if merged
-                            start: interval[0],
-                            end: interval[1],
-
-                        };
-                    });
-
-                    const scheduleIntervals = normalizeSchedule(slots);
-
-                    const unavailable = [
-                        ...mergedBooked.map(b => [b.start, b.end]),
-                        ...leaves.map(l => [l.start, l.end])
-                    ];
-
-                    const available = subtractIntervals(
-                        scheduleIntervals,
-                        // mergedBooked.map(b => [b.start, b.end])
-                        unavailable
-                    );
-
-                    dayStatus[dateStr].slots = {
-                        available: formatSlots(available),
-                        booked: formatSlots(mergedBooked?.map(e => [e?.start, e?.end, e?.id]), true),
-                        leave: formatSlots(leaves.map(l => [l.start, l.end, l.id || null])),
-                    };
-
-
-                    if (available.length === 0 && booked.length > 0) {
-                        dayStatus[dateStr].status = "unavailable"; // fully booked
-                    } else if (available.length > 0) {
-                        dayStatus[dateStr].status = "available";
-                    }
-                });
-            }
-
-            return Object.values(dayStatus);
-        } else {
-            // NO range provided -> group ALL appointments by appointment date
-            appointments.forEach((appt) => {
-                const dateStr = getApptDateStr(appt) || moment(appt.createdAt || appt.created_at || new Date()).format("YYYY-MM-DD");
-                if (!dayStatus[dateStr]) {
-                    dayStatus[dateStr] = { date: dateStr, status: "unavailable", events: [] };
-                }
-                dayStatus[dateStr].events.push({
-                    // title: `Booked - ${appt.patientName || appt.patient_name || "Patient"}`,
-                    title: `${appt.time_slot?.start || ""}-${appt.time_slot?.end || ""}`,
-                    start: appt.time_slot?.start,
-                    end: appt.time_slot?.end,
-                    type: "booked",
-                    status: appt?.status,
-                    id: appt?._id,
-                    visit_type: appt?.visit_type,
-                    patient_id: appt?.patient_id,
-                    creator:appt?.creator,
-                    created_by:appt?.created_by
-
-                });
-                if (dayStatus[dateStr].status !== "leave") {
-                    dayStatus[dateStr].status = "available";
-                }
-            });
-
-            // Apply weekly schedule (mark available days)
-
-            if (weeklySchedule) {
-                Object.keys(dayStatus).forEach((dateStr) => {
-                    if (dayStatus[dateStr].status === "leave") return;
-
-                    const dayOfWeek = moment(dateStr).format("dddd").toUpperCase(); // e.g. "MONDAY"
-
-                    const daySchedule = weeklySchedule.weekly_schedule.find(d => d.day === dayOfWeek);
-                    const slots = daySchedule ? daySchedule.time_slots : [];
-
-                    //     if (slots && slots.length > 0) {
-                    //         if (dayStatus[dateStr].events.length === 0) {
-                    //             // No appointments → available
-                    //             dayStatus[dateStr].status = "available";
-                    //         } else {
-                    //             // Some appointments exist → check if fully booked
-                    //             if (isFullyBooked(slots, dayStatus[dateStr].events)) {
-                    //                 dayStatus[dateStr].status = "unavailable"; // fully booked
-                    //             } else {
-                    //                 dayStatus[dateStr].status = "available"; // still has free slots
-                    //             }
-                    //         }
-                    //     }
-                    // });
-                    const booked = dayStatus[dateStr].events
-                        .filter(e => e.type === "booked")
-                        .map(e => [toMinutes(e.start), toMinutes(e.end)]);
-
-                    const mergedBooked = mergeIntervals(booked);
-
-                    // Subtract booked from schedule
-
-
-
-                    const scheduleIntervals = normalizeSchedule(slots);
-                    const available = subtractIntervals(scheduleIntervals, mergedBooked);
-
-                    dayStatus[dateStr].slots = {
-                        available: formatSlots(available),
-                        booked: formatSlots(mergedBooked),
-                    };
-
-                    if (available.length === 0 && booked.length > 0) {
-                        dayStatus[dateStr].status = "unavailable"; // fully booked
-                    } else if (available.length > 0) {
-                        dayStatus[dateStr].status = "available";
-                    }
-                });
-            }
-
-
-            // mark leaves for any matching appointment days (optional)
-            leaves.forEach((leave) => {
-                const leaveStart = moment(leave.start).startOf("day");
-                const leaveEnd = moment(leave.end).endOf("day");
-                Object.keys(dayStatus).forEach((dateStr) => {
-                    const d = moment(dateStr, "YYYY-MM-DD");
-                    if (d.isBetween(leaveStart, leaveEnd, null, "[]")) {
-                        dayStatus[dateStr].status = "leave";
-                        dayStatus[dateStr].events.unshift({
-                            title: "Doctor on Leave",
-                            start: d.startOf("day").toDate(),
-                            end: d.endOf("day").toDate(),
-                            type: "leave",
-                        });
-                    }
-                });
-            });
-
-            return Object.values(dayStatus);;
-        }
-    } catch (error) {
-        console.error("getAppointmentByDoctor error:", error);
-        return error;
+    // Build query — filter by date only if both from+to provided
+    const query = { staff_id: doctorId, status: { $nin: [AppointmentStatus?.CANCELLED, AppointmentStatus?.COMPLETED] } };
+    let startDate, endDate;
+    const hasRange = from && to;
+    if (hasRange) {
+      startDate = moment(from).startOf("day");
+      endDate = moment(to).endOf("day");
+      if (!startDate.isValid() || !endDate.isValid()) {
+        return responseData.fail(res, "Invalid from/to dates", 400);
+      }
+      query.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
     }
+
+    // Fetch data
+    const [appointments, weeklySchedule, leaves] = await Promise.all([
+      AppointmentSchema.find(query).lean(),
+      WeeklyScheduleSchema.findOne({ staff_id: doctorId }).lean(),
+      StaffLeaveSchema.find({ staff_id: doctorId }).lean(),
+    ]);
+
+    // helper to get reliable date string from an appointment
+    const getApptDateStr = (appt) => {
+      // prefer appt.date, fallback to createdAt
+      const dt = appt && (appt.date);
+      // if still falsy, return null so caller can decide
+      if (!dt) return null;
+      return moment(dt).format("YYYY-MM-DD");
+    };
+
+    const dayStatus = {};
+
+    if (hasRange) {
+      // Build a day map for the requested range
+      let current = startDate.clone();
+      while (current.isSameOrBefore(endDate)) {
+        const dateStr = current.format("YYYY-MM-DD");
+        dayStatus[dateStr] = { date: dateStr, status: "unavailable", events: [] };
+        current.add(1, "day");
+      }
+
+
+      // Mark leaves that fall in range
+      const leaveIntervals = [];
+      leaves.forEach((leave) => {
+        // Skip cancelled leaves
+        if (leave.status === leaveStatus.CANCELLED) return;
+        const leaveStart = moment(leave.start_date).startOf("day");
+        const leaveEnd = moment(leave.end_date).endOf("day");
+        Object.keys(dayStatus).forEach((dateStr) => {
+          const d = moment(dateStr, "YYYY-MM-DD");
+          if (d.isBetween(leaveStart, leaveEnd, null, "[]")) {
+            dayStatus[dateStr].status = "leave";
+
+            if (moment(d).isBetween(leaveStart, leaveEnd, null, "[]")) {
+              let startTime, endTime;
+
+              if (leave.leave_type === "CUSTOM") {
+                startTime = leave.start_time || "00:00";
+                endTime = leave.end_time || "23:59";
+              } else {
+                const times = leaveTypeTimes[leave.leave_type] || leaveTypeTimes.FULL_DAY;
+                startTime = times.start;
+                endTime = times.end;
+              }
+
+              leaveIntervals.push([toMinutes(startTime), toMinutes(endTime)]);
+
+
+
+              dayStatus[dateStr].events.push({
+                title: "Doctor on Leave",
+                start_date: leave.start_date,
+                end_date: leave.start_date,
+                start: startTime,
+                end: endTime,
+                full_day: leave.full_day,
+                status: leave?.status,
+                type: "leave",
+
+              });
+            }
+
+
+          }
+        });
+      });
+
+
+
+      // Add appointments into correct day bucket using appt.date
+      appointments.forEach((appt) => {
+        const dateStr = getApptDateStr(appt); // guaranteed to be string or null
+        if (!dateStr) return; // skip malformed appt without date
+        if (!dayStatus[dateStr]) return; // appointment outside requested range
+        dayStatus[dateStr].events.push({
+          title: `${appt.time_slot?.start || ""}-${appt.time_slot?.end || ""}`,
+          start: appt.time_slot?.start, // you may convert to full Date when required by frontend
+          end: appt.time_slot?.end,
+          type: "booked",
+          status: appt?.status,
+          id: appt?._id,
+          visit_type: appt?.visit_type,
+          patient_id: appt?.patient_id,
+          creator: appt?.creator,
+          created_by: appt?.created_by
+        });
+        if (dayStatus[dateStr].status !== "leave") {
+          dayStatus[dateStr].status = "available";
+        }
+      });
+
+
+      if (weeklySchedule) {
+        Object.keys(dayStatus).forEach((dateStr) => {
+          // if (dayStatus[dateStr].status === "leave") return;
+
+          const dayOfWeek = moment(dateStr).format("dddd").toUpperCase(); // e.g. "MONDAY"
+
+          const daySchedule = weeklySchedule.weekly_schedule.find(d => d.day === dayOfWeek);
+          const slots = daySchedule ? daySchedule.time_slots : [];
+
+
+
+          const booked = dayStatus[dateStr].events
+            .filter(e => e.type === "booked")
+            .map(e => ({
+              id: e.id, // store appointment id
+              start: toMinutes(e.start),
+              end: toMinutes(e.end),
+            }));
+
+          const leaves = dayStatus[dateStr].events
+            .filter(e => e.type === "leave")
+            .map(e => ({
+              id: e.id || null,
+              start: toMinutes(e.start),
+              end: toMinutes(e.end),
+            }));
+          // Merge only time ranges, but keep mapping back ids
+          const mergedBooked = mergeIntervals(
+            booked.map(b => [b.start, b.end])
+          ).map(interval => {
+            // Keep ids for intervals that overlap
+            const overlappingIds = booked
+              .filter(b => !(interval[1] <= b.start || interval[0] >= b.end))
+              .map(b => b.id);
+
+            return {
+              id: overlappingIds.length === 1 ? overlappingIds[0] : overlappingIds, // array if merged
+              start: interval[0],
+              end: interval[1],
+
+            };
+          });
+
+          const scheduleIntervals = normalizeSchedule(slots);
+
+          const unavailable = [
+            ...mergedBooked.map(b => [b.start, b.end]),
+            ...leaves.map(l => [l.start, l.end])
+          ];
+
+          const available = subtractIntervals(
+            scheduleIntervals,
+            // mergedBooked.map(b => [b.start, b.end])
+            unavailable
+          );
+
+          dayStatus[dateStr].slots = {
+            available: formatSlots(available),
+            booked: formatSlots(mergedBooked?.map(e => [e?.start, e?.end, e?.id]), true),
+            leave: formatSlots(leaves.map(l => [l.start, l.end, l.id || null])),
+          };
+
+
+          if (available.length === 0 && booked.length > 0) {
+            dayStatus[dateStr].status = "unavailable"; // fully booked
+          } else if (available.length > 0) {
+            dayStatus[dateStr].status = "available";
+          }
+        });
+      }
+
+      return Object.values(dayStatus);
+    } else {
+      // NO range provided -> group ALL appointments by appointment date
+      appointments.forEach((appt) => {
+        const dateStr = getApptDateStr(appt) || moment(appt.createdAt || appt.created_at || new Date()).format("YYYY-MM-DD");
+        if (!dayStatus[dateStr]) {
+          dayStatus[dateStr] = { date: dateStr, status: "unavailable", events: [] };
+        }
+        dayStatus[dateStr].events.push({
+          // title: `Booked - ${appt.patientName || appt.patient_name || "Patient"}`,
+          title: `${appt.time_slot?.start || ""}-${appt.time_slot?.end || ""}`,
+          start: appt.time_slot?.start,
+          end: appt.time_slot?.end,
+          type: "booked",
+          status: appt?.status,
+          id: appt?._id,
+          visit_type: appt?.visit_type,
+          patient_id: appt?.patient_id,
+          creator: appt?.creator,
+          created_by: appt?.created_by
+
+        });
+        if (dayStatus[dateStr].status !== "leave") {
+          dayStatus[dateStr].status = "available";
+        }
+      });
+
+      // Apply weekly schedule (mark available days)
+
+      if (weeklySchedule) {
+        Object.keys(dayStatus).forEach((dateStr) => {
+          if (dayStatus[dateStr].status === "leave") return;
+
+          const dayOfWeek = moment(dateStr).format("dddd").toUpperCase(); // e.g. "MONDAY"
+
+          const daySchedule = weeklySchedule.weekly_schedule.find(d => d.day === dayOfWeek);
+          const slots = daySchedule ? daySchedule.time_slots : [];
+
+          //     if (slots && slots.length > 0) {
+          //         if (dayStatus[dateStr].events.length === 0) {
+          //             // No appointments → available
+          //             dayStatus[dateStr].status = "available";
+          //         } else {
+          //             // Some appointments exist → check if fully booked
+          //             if (isFullyBooked(slots, dayStatus[dateStr].events)) {
+          //                 dayStatus[dateStr].status = "unavailable"; // fully booked
+          //             } else {
+          //                 dayStatus[dateStr].status = "available"; // still has free slots
+          //             }
+          //         }
+          //     }
+          // });
+          const booked = dayStatus[dateStr].events
+            .filter(e => e.type === "booked")
+            .map(e => [toMinutes(e.start), toMinutes(e.end)]);
+
+          const mergedBooked = mergeIntervals(booked);
+
+          // Subtract booked from schedule
+
+
+
+          const scheduleIntervals = normalizeSchedule(slots);
+          const available = subtractIntervals(scheduleIntervals, mergedBooked);
+
+          dayStatus[dateStr].slots = {
+            available: formatSlots(available),
+            booked: formatSlots(mergedBooked),
+          };
+
+          if (available.length === 0 && booked.length > 0) {
+            dayStatus[dateStr].status = "unavailable"; // fully booked
+          } else if (available.length > 0) {
+            dayStatus[dateStr].status = "available";
+          }
+        });
+      }
+
+
+      // mark leaves for any matching appointment days (optional)
+      leaves.forEach((leave) => {
+        const leaveStart = moment(leave.start).startOf("day");
+        const leaveEnd = moment(leave.end).endOf("day");
+        Object.keys(dayStatus).forEach((dateStr) => {
+          const d = moment(dateStr, "YYYY-MM-DD");
+          if (d.isBetween(leaveStart, leaveEnd, null, "[]")) {
+            dayStatus[dateStr].status = "leave";
+            dayStatus[dateStr].events.unshift({
+              title: "Doctor on Leave",
+              start: d.startOf("day").toDate(),
+              end: d.endOf("day").toDate(),
+              type: "leave",
+            });
+          }
+        });
+      });
+
+      return Object.values(dayStatus);;
+    }
+  } catch (error) {
+    console.error("getAppointmentByDoctor error:", error);
+    return error;
+  }
 
 
 
 }
 
 const getAppontmentByDoctor = async (req, res) => {
-    return new Promise(async () => {
+  return new Promise(async () => {
 
-        try {
-            const doctorId = req.params._id;
-            const { from, to } = req.query;
+    try {
+      const doctorId = req.params._id;
+      const { from, to } = req.query;
 
-            const result = await structureAppointmentHelper(doctorId, from, to)
+      const result = await structureAppointmentHelper(doctorId, from, to)
 
-            return responseData.success(res, result, messageConstants.FETCHED_SUCCESSFULLY);
-        
-        } catch (error) {
-            console.error("getAppointmentByDoctor error:", error);
-            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
-        }
+      return responseData.success(res, result, messageConstants.FETCHED_SUCCESSFULLY);
 
-    })
+    } catch (error) {
+      console.error("getAppointmentByDoctor error:", error);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+
+  })
 
 }
 
@@ -746,7 +723,7 @@ const getAppontmentByPatient = async (req, res) => {
 //             const result = await AppointmentSchema.find(query).sort({ createdAt: -1 }).lean();
 //             // const result = await AppointmentSchema.find({ staff_id: doctorId}).lean();
 //             return responseData.success(res, result, messageConstants.FETCHED_SUCCESSFULLY);
-           
+
 //         } catch (error) {
 //             console.error("getAppointmentByDoctor error:", error);
 //             return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
@@ -756,308 +733,308 @@ const getAppontmentByPatient = async (req, res) => {
 // }
 
 const getAppointmentList = async (req, res) => {
-    return new Promise(async () => {
-  try {
-    const staffId = req.params._id ;
-    const { from, to, status } = req.query;
+  return new Promise(async () => {
+    try {
+      const staffId = req.params._id;
+      const { from, to, status } = req.query;
 
-    if (!staffId) {
-      return responseData.fail(res, "Staff ID is required", 400);
-    }
+      if (!staffId) {
+        return responseData.fail(res, "Staff ID is required", 400);
+      }
 
-    // Date filter setup
-    const filter = {
-      staff_id: staffId,
-    };
-
-    if (from && to) {
-      filter.date = {
-        $gte: new Date(from),
-        $lte: new Date(to),
+      // Date filter setup
+      const filter = {
+        staff_id: staffId,
       };
+
+      if (from && to) {
+        filter.date = {
+          $gte: new Date(from),
+          $lte: new Date(to),
+        };
+      }
+
+      //  if (status) {
+      //     filter.status = status;
+      //   }
+      if (status) {
+        const statusArray = status.split(",").map((s) => s.trim());
+        if (statusArray.length === 1) {
+          filter.status = statusArray[0];
+        } else {
+          filter.status = { $in: statusArray };
+        }
+      }
+
+
+
+      const appointments = await AppointmentSchema.find(filter)
+        .populate({
+          path: 'patient_id',
+          model: UserSchema,
+          select: 'firstname lastname phone address countryCode city state country'
+        })
+        .sort({ createdAt: -1 }); // optional: sort by date
+
+      const formattedAppointments = appointments.map((apt) => {
+        const patient = apt.patient_id || {};
+
+        return {
+          _id: apt._id,
+          staff_id: apt.staff_id,
+          patient_id: patient._id || null,
+          date: apt.date,
+          time_slot: apt.time_slot,
+          visit_type: apt.visit_type,
+          status: apt.status,
+          message: apt.message || "",
+          created_by: apt.created_by,
+          creator: apt.creator,
+          createdAt: apt.createdAt,
+          updatedAt: apt.updatedAt,
+
+          // ✅ New fields added:
+          patient_name: patient.firstname && patient.lastname
+            ? `${patient.firstname} ${patient.lastname}`
+            : patient.firstname || "",
+          patient_phone: patient.countryCode && patient.phone
+            ? `${patient.countryCode}${patient.phone}`
+            : patient.phone || "",
+          patient_address: patient.address || "",
+          patient_city: patient.city || "",
+          patient_state: patient.state || "",
+          patient_country: patient.country || "",
+        };
+      });
+
+      logger.info("Appointments fetched successfully");
+
+      return responseData.success(
+        res,
+        formattedAppointments,
+        messageConstants.DATA_FETCHED_SUCCESSFULLY
+      );
+    } catch (error) {
+      logger.error("Get Appointment List " + messageConstants.INTERNAL_SERVER_ERROR, error);
+      return responseData.fail(
+        res,
+        messageConstants.INTERNAL_SERVER_ERROR,
+        500
+      );
     }
-
-    //  if (status) {
-    //     filter.status = status;
-    //   }
-    if (status) {
-  const statusArray = status.split(",").map((s) => s.trim());
-  if (statusArray.length === 1) {
-    filter.status = statusArray[0];
-  } else {
-    filter.status = { $in: statusArray };
-  }
-}
-
-
-
-    const appointments = await AppointmentSchema.find(filter)
-      .populate({
-        path: 'patient_id',
-        model: UserSchema,
-        select: 'firstname lastname phone address countryCode city state country'
-      })
-      .sort({ createdAt: -1  }); // optional: sort by date
-
-    const formattedAppointments = appointments.map((apt) => {
-      const patient = apt.patient_id || {};
-
-      return {
-        _id: apt._id,
-        staff_id: apt.staff_id,
-        patient_id: patient._id || null,
-        date: apt.date,
-        time_slot: apt.time_slot,
-        visit_type: apt.visit_type,
-        status: apt.status,
-        message: apt.message || "",
-        created_by: apt.created_by,
-        creator: apt.creator,
-        createdAt: apt.createdAt,
-        updatedAt: apt.updatedAt,
-
-        // ✅ New fields added:
-        patient_name: patient.firstname && patient.lastname 
-          ? `${patient.firstname} ${patient.lastname}` 
-          : patient.firstname || "",
-        patient_phone: patient.countryCode && patient.phone
-          ? `${patient.countryCode}${patient.phone}`
-          : patient.phone || "",
-        patient_address: patient.address || "",
-        patient_city: patient.city||"",
-         patient_state: patient.state||"",
-          patient_country: patient.country||"",
-      };
-    });
-
-    logger.info("Appointments fetched successfully");
-
-    return responseData.success(
-      res,
-      formattedAppointments,
-      messageConstants.DATA_FETCHED_SUCCESSFULLY
-    );
-  } catch (error) {
-    logger.error("Get Appointment List " + messageConstants.INTERNAL_SERVER_ERROR, error);
-    return responseData.fail(
-      res,
-      messageConstants.INTERNAL_SERVER_ERROR,
-      500
-    );
-  }
-   })
+  })
 };
 
 
 const getPatients = async (req, res) => {
-     return new Promise(async () => {
-  try {
-    const {
-      doctor_id = null,
-      search = "",
-      skip,
-      limit,
-      from_date,
-      to_date,
-      patient_status,
-    } = req.query;
+  return new Promise(async () => {
+    try {
+      const {
+        doctor_id = null,
+        search = "",
+        skip,
+        limit,
+        from_date,
+        to_date,
+        patient_status,
+      } = req.query;
 
-    const skipVal = skip && !isNaN(skip) ? parseInt(skip) : 0;
-    const limitVal = limit && !isNaN(limit) ? parseInt(limit) : null;
+      const skipVal = skip && !isNaN(skip) ? parseInt(skip) : 0;
+      const limitVal = limit && !isNaN(limit) ? parseInt(limit) : null;
 
-    // 🔹 Base match condition for patients
-    const match = {
-      role: UserTypes.USER,
-      is_deleted: false,
-    };
+      // 🔹 Base match condition for patients
+      const match = {
+        role: UserTypes.USER,
+        is_deleted: false,
+      };
 
-    // 🔹 Search filter
-    if (search) {
-      match.$or = [
-        { firstname: { $regex: search, $options: "i" } },
-        { lastname: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        {
-          $expr: {
-            $regexMatch: {
-              input: { $toString: "$phone" },
-              regex: search,
-              options: "i",
+      // 🔹 Search filter
+      if (search) {
+        match.$or = [
+          { firstname: { $regex: search, $options: "i" } },
+          { lastname: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          {
+            $expr: {
+              $regexMatch: {
+                input: { $toString: "$phone" },
+                regex: search,
+                options: "i",
+              },
             },
           },
-        },
-      ];
-    }
+        ];
+      }
 
-    // 🔹 Date range filter (created_at)
-    let dateFilter = {};
-    if (from_date) dateFilter.$gte = new Date(from_date);
-    if (to_date) dateFilter.$lte = new Date(to_date);
-    if (Object.keys(dateFilter).length > 0) {
-      match.created_at = dateFilter;
-    }
+      // 🔹 Date range filter (created_at)
+      let dateFilter = {};
+      if (from_date) dateFilter.$gte = new Date(from_date);
+      if (to_date) dateFilter.$lte = new Date(to_date);
+      if (Object.keys(dateFilter).length > 0) {
+        match.created_at = dateFilter;
+      }
 
       // 🔹 Filter by assigned doctor
       if (doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)) {
         match.assign_doctor = new mongoose.Types.ObjectId(doctor_id);
       }
 
-    // 🔹 Aggregation pipeline
-    const pipeline = [
-      { $match: match },
+      // 🔹 Aggregation pipeline
+      const pipeline = [
+        { $match: match },
 
-      // Join appointments for each patient
-      {
-        $lookup: {
-          from: "appointments",
-          let: { patientId: "$_id" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $eq: ["$patient_id", "$$patientId"],
-                },
-                ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
+        // Join appointments for each patient
+        {
+          $lookup: {
+            from: "appointments",
+            let: { patientId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $eq: ["$patient_id", "$$patientId"],
+                  },
+                  ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
                     ? { staff_id: new mongoose.Types.ObjectId(doctor_id) }
                     : {}),
+                },
+              },
+              { $sort: { createdAt: -1 } },
+            ],
+            as: "appointments",
+          },
+        },
+
+        // // Filter only those who have appointments with selected doctor (if doctor_id provided)
+        // ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
+        //   ? [
+        //       {
+        //         $addFields: {
+        //           appointments: {
+        //             $filter: {
+        //               input: "$appointments",
+        //               as: "appt",
+        //               cond: {
+        //                 $eq: [
+        //                   "$$appt.staff_id",
+        //                   new mongoose.Types.ObjectId(doctor_id),
+        //                 ],
+        //               },
+        //             },
+        //           },
+        //         },
+        //       },
+        //       {
+        //         $match: {
+        //           "appointments.0": { $exists: true }, // keep only patients having at least 1 appointment with this doctor
+        //         },
+        //       },
+        //     ]
+        //   : []),
+
+        // Add visit_count field
+        {
+          $addFields: {
+            patient_status: { $arrayElemAt: ["$appointments.patient_status", 0] },
+            patient_message: { $arrayElemAt: ["$appointments.patient_message", 0] },
+            visit_count: { $size: "$appointments" },
+          },
+        },
+
+        // ...(patient_status
+        //     ? [
+        //         {
+        //           $match: {
+        //             patient_status: patient_status,
+        //           },
+        //         },
+        //       ]
+        //     : []),
+        ...(patient_status
+          ? [
+            {
+              $match: {
+                patient_status: {
+                  $in: patient_status.split(",").map((s) => s.trim()),
+                },
               },
             },
-            { $sort: { createdAt: -1 } },
-          ],
-          as: "appointments",
-        },
-      },
+          ]
+          : []),
 
-      // // Filter only those who have appointments with selected doctor (if doctor_id provided)
-      // ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
-      //   ? [
-      //       {
-      //         $addFields: {
-      //           appointments: {
-      //             $filter: {
-      //               input: "$appointments",
-      //               as: "appt",
-      //               cond: {
-      //                 $eq: [
-      //                   "$$appt.staff_id",
-      //                   new mongoose.Types.ObjectId(doctor_id),
-      //                 ],
-      //               },
-      //             },
-      //           },
-      //         },
-      //       },
-      //       {
-      //         $match: {
-      //           "appointments.0": { $exists: true }, // keep only patients having at least 1 appointment with this doctor
-      //         },
-      //       },
-      //     ]
-      //   : []),
 
-      // Add visit_count field
-      {
-        $addFields: {
-          patient_status: { $arrayElemAt: ["$appointments.patient_status", 0] },
-          patient_message: { $arrayElemAt: ["$appointments.patient_message", 0] },
-          visit_count: { $size: "$appointments" },
-        },
-      },
 
-      // ...(patient_status
-      //     ? [
-      //         {
-      //           $match: {
-      //             patient_status: patient_status,
-      //           },
-      //         },
-      //       ]
-      //     : []),
-      ...(patient_status
-  ? [
-      {
-        $match: {
-          patient_status: {
-            $in: patient_status.split(",").map((s) => s.trim()),
-          },
-        },
-      },
-    ]
-  : []),
+        // Sort latest first
+        { $sort: { created_at: -1 } },
 
-      
+        // Pagination
+        ...(limitVal ? [{ $skip: skipVal }, { $limit: limitVal }] : []),
 
-      // Sort latest first
-      { $sort: { created_at: -1 } },
-
-      // Pagination
-      ...(limitVal ? [{ $skip: skipVal }, { $limit: limitVal }] : []),
-
-      // Project only needed fields
-      {
-        $project: {
-          _id: 1,
-          firstname: 1,
-          lastname: 1,
-          email: 1,
-          phone: 1,
-          address: 1,
-          country: 1,
-          state: 1,
-          city: 1,
-          gender: 1,
-          assign_doctor: 1,
-          patient_status: 1,
-          patient_message: 1,
-          dob: {
-            $cond: {
-              if: { $ifNull: ["$dob", false] },
-              then: { $dateToString: { format: "%d/%m/%Y", date: "$dob" } },
-              else: null,
+        // Project only needed fields
+        {
+          $project: {
+            _id: 1,
+            firstname: 1,
+            lastname: 1,
+            email: 1,
+            phone: 1,
+            address: 1,
+            country: 1,
+            state: 1,
+            city: 1,
+            gender: 1,
+            assign_doctor: 1,
+            patient_status: 1,
+            patient_message: 1,
+            dob: {
+              $cond: {
+                if: { $ifNull: ["$dob", false] },
+                then: { $dateToString: { format: "%d/%m/%Y", date: "$dob" } },
+                else: null,
+              },
             },
+            visit_count: 1,
           },
-          visit_count: 1,
         },
-      },
-    ];
+      ];
 
-    // Execute aggregation and count
-    const [patients, totalCount] = await Promise.all([
-      UserSchema.aggregate(pipeline),
-      UserSchema.countDocuments(match),
-      // Count total unique patients matching filters
+      // Execute aggregation and count
+      const [patients, totalCount] = await Promise.all([
+        UserSchema.aggregate(pipeline),
+        UserSchema.countDocuments(match),
+        // Count total unique patients matching filters
 
-      // doctor_id
-      //   ? AppointmentSchema.aggregate([
-      //       {
-      //         $match: {
-      //           staff_id: new mongoose.Types.ObjectId(doctor_id),
-      //         },
-      //       },
-      //       { $group: { _id: "$patient_id" } },
-      //       { $count: "count" },
-      //     ]).then((r) => (r[0]?.count || 0))
-      //   : UserSchema.countDocuments(match),
-    ]);
+        // doctor_id
+        //   ? AppointmentSchema.aggregate([
+        //       {
+        //         $match: {
+        //           staff_id: new mongoose.Types.ObjectId(doctor_id),
+        //         },
+        //       },
+        //       { $group: { _id: "$patient_id" } },
+        //       { $count: "count" },
+        //     ]).then((r) => (r[0]?.count || 0))
+        //   : UserSchema.countDocuments(match),
+      ]);
 
-    return responseData.success(
-      res,
-       patients, 
-      messageConstants.FETCHED_SUCCESSFULLY,
-      {
-        // rows: patients,
-        total_count: totalCount,
-      },
-      
-    );
-  } catch (error) {
-    logger.error("Get Patients Error:", error);
-    return responseData.fail(
-      res,
-      messageConstants.INTERNAL_SERVER_ERROR,
-      500
-    );
-  }
+      return responseData.success(
+        res,
+        patients,
+        messageConstants.FETCHED_SUCCESSFULLY,
+        {
+          // rows: patients,
+          total_count: totalCount,
+        },
+
+      );
+    } catch (error) {
+      logger.error("Get Patients Error:", error);
+      return responseData.fail(
+        res,
+        messageConstants.INTERNAL_SERVER_ERROR,
+        500
+      );
+    }
   })
 };
 
@@ -1330,144 +1307,120 @@ const updateAppointmentStatus = async (req, res) => {
 };
 
 
-// const updateAppointmentStatus = async (req, res) => {
+
+
+// const updateAppointment = async (req, res) => {
 //   return new Promise(async () => {
 //     try {
-//       const { reference_id, sender_id, status, message, notification_id } = req?.body;
+//       const { reference_id, date, time_slot, visit_type, patient_id, patient_name } = req.body;
 //       const actorId = req.userDetails?._id;
 
-//       // 1️⃣ Validate inputs
+//       // 1. Validate input
 //       if (!reference_id) {
 //         return responseData.fail(res, "reference_id is required", 400);
 //       }
-//       if (
-//         !status ||
-//         ![
-//           AppointmentStatus.CONFIRMED,
-//           AppointmentStatus.CANCELLED,
-//           AppointmentStatus.COMPLETED
-//         ].includes(status)
-//       ) {
-//         return responseData.fail(
-//           res,
-//           "Invalid status. Must be CONFIRMED, CANCELLED or COMPLETED.",
-//           400
-//         );
-//       }
 
-//       // 2️⃣ Fetch and update appointment
-//       const appointment = await AppointmentSchema.findById(reference_id);
+//       // 2. Fetch appointment
+//       const appointment = await AppointmentSchema.findById(reference_id).populate("staff_id");
 //       if (!appointment) {
 //         return responseData.fail(res, "Appointment not found", 404);
 //       }
 
-//       const oldStatus = appointment.status;
-//       appointment.status = status;
-//       await appointment.save();
+//       // 3. Prepare new values (keep old if not provided)
+//       const newDate = date || appointment.date;
+//       const newTimeSlot = time_slot || appointment.time_slot;
+//       const newVisitType = visit_type || appointment.visit_type;
+//       const newPatientId = patient_id || appointment.patient_id;
 
-//       // 3️⃣ Mark original notification as read if exists
-//       if (notification_id) {
-//         try {
-//           await NotificationSchema.findByIdAndUpdate(notification_id, { read: true });
-//         } catch (err) {
-//           logger.warn("Failed to mark original notification as read", err);
-//         }
+//       // const getAllBookingsForDoctor = async (doctorId, from, to) => {
+//       //     return AppointmentSchema.find({
+//       //         staff_id: doctorId,
+//       //         date: { $gte: from, $lte: to }
+//       //     });
+//       // };
+//       // 4. Validate against availability
+
+
+//       const allBookings = await structureAppointmentHelper(appointment.staff_id, newDate, newDate);
+
+//       console.log(allBookings, ">>> all the appoitments >>>")
+
+//       // helper you already have that returns slots + booked
+
+//       const effectiveSlots = buildEffectiveSlots(allBookings, appointment);
+
+//       console.log(effectiveSlots, ">> Effective slots")
+//       // function that merges old appointment slot into available slots
+
+//       const { start, end } = newTimeSlot;
+//       const apptStart = toMinutes(start);
+//       const apptEnd = toMinutes(end);
+//       const mergedAvail = mergeSlots(effectiveSlots);
+
+//       const isInsideAvailable = mergedAvail.some((a) => {
+//         const availableStart = toMinutes(a.start);
+//         const availableEnd = toMinutes(a.end);
+//         return apptStart >= availableStart && apptEnd <= availableEnd;
+//       });
+
+//       if (!isInsideAvailable) {
+//         return responseData.fail(
+//           res,
+//           `Selected time ${start}–${end} is not available for Dr. ${appointment.staff_id.firstname}.`,
+//           400
+//         );
 //       }
 
-//       // 4️⃣ Determine if notification should be sent
-//       let shouldNotify = false;
-//       let notifType = "";
-//       let defaultMsg = "";
+//       // 5. Update appointment
+//       appointment.date = newDate;
+//       appointment.time_slot = newTimeSlot;
+//       appointment.visit_type = newVisitType;
+//       appointment.patient_id = newPatientId;
+//       appointment.status = AppointmentStatus.CONFIRMED; // reset until doctor confirms
+//       await appointment.save();
 
-//       const appointmentDate = new Date(appointment.date);
-//       const formattedDate = `${String(appointmentDate.getDate()).padStart(2, "0")}/${String(
-//         appointmentDate.getMonth() + 1
-//       ).padStart(2, "0")}/${appointmentDate.getFullYear()}`;
+//       console.log(newDate, ">> new Date ")
 
+//       const appointmentDate = new Date(date);
+//       const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
 //       const formatTimeTo12Hour = (timeString) => {
-//         const [hours, minutes] = timeString.split(":");
+//         const [hours, minutes] = timeString.split(':');
 //         const hour = parseInt(hours);
-//         const ampm = hour >= 12 ? "PM" : "AM";
+//         const ampm = hour >= 12 ? 'PM' : 'AM';
 //         const twelveHour = hour % 12 || 12;
 //         return `${twelveHour}:${minutes} ${ampm}`;
 //       };
+//       const formattedStartTime = formatTimeTo12Hour(time_slot?.start);
+//       const formattedEndTime = formatTimeTo12Hour(time_slot?.end);
+//       const user = await UserSchema?.findOne({ staff_id: appointment?.staff_id });
+//       const notification = await NotificationSchema.create({
+//         sender_id: patient_id,
+//         receiver_id: user?._id,
+//         type: NotificationType.APPOINTMENT_REQUEST,
+//         message: `Appointment request from patient ${patient_name} on ${date} (${time_slot})`,
+//         reference_id: appointment._id,
+//         reference_model: "Appointment",
+//         read: false
+//       });
+//       const io = req.app.get('socketio');
 
-//       const formattedStartTime = formatTimeTo12Hour(appointment.time_slot?.start);
-//       const formattedEndTime = formatTimeTo12Hour(appointment.time_slot?.end);
+//       const doctorSocket = await SocketSchema.findOne({ user_id: user._id });
 
-//       // ✅ CONFIRMED → CANCELLED
-//       if (oldStatus === AppointmentStatus.CONFIRMED && status === AppointmentStatus.CANCELLED) {
-//         shouldNotify = true;
-//         notifType = NotificationType.APPOINTMENT_CANCELLED || "APPOINTMENT_CANCELLED";
-//         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been declined.`;
-//       }
+//       io.to(`${doctorSocket.socket_id}`).emit("appointmentRequest", {
+//         _id: notification?._id,
+//         sender_id: patient_id,
+//         receiver_id: user?._id,
+//         type: NotificationType.APPOINTMENT_REQUEST,
+//         // message: `Appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
+//         message: `Appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
+//         reference_id: appointment._id,
+//         reference_model: "Appointment",
+//         read: false
+//       });
 
-//       // ✅ CANCELLED → CONFIRMED
-//       else if (oldStatus === AppointmentStatus.CANCELLED && status === AppointmentStatus.CONFIRMED) {
-//         shouldNotify = true;
-//         notifType = NotificationType.APPOINTMENT_CONFIRMED || "APPOINTMENT_CONFIRMED";
-//         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
-//       }
 
-//       // ⚠️ CONFIRMED → COMPLETED → No notification
-//       else if (oldStatus === AppointmentStatus.CONFIRMED && status === AppointmentStatus.COMPLETED) {
-//         shouldNotify = false;
-//       }
+//       return responseData.success(res, { appointment }, messageConstants.DATA_UPDATED_SUCCESSFULLY);
 
-//       // 5️⃣ Build recipients
-//       const recipients = new Set();
-//       if (sender_id) recipients.add(String(sender_id));
-//       if (appointment.creator) recipients.add(appointment.creator.toString());
-//       if (actorId) recipients.delete(String(actorId)); // remove doctor if same
-
-//       const recipientsArr = Array.from(recipients);
-//       const io = req.app?.get("socketio");
-
-//       // 6️⃣ Send notification (only if needed)
-//       if (shouldNotify) {
-//         const createdNotifications = [];
-
-//         for (const receiverId of recipientsArr) {
-//           const notifPayload = {
-//             sender_id: actorId || null,
-//             receiver_id: receiverId,
-//             type: notifType,
-//             message: defaultMsg,
-//             reference_id: appointment._id,
-//             reference_model: "Appointment",
-//             read: false,
-//             reason: message,
-//           };
-
-//           const created = await NotificationSchema.create(notifPayload);
-//           createdNotifications.push(created);
-
-//           // emit via socket
-//           try {
-//             const socketRec = await SocketSchema.findOne({ user_id: receiverId });
-//             if (io && socketRec && socketRec.socket_id) {
-//               io.to(socketRec.socket_id).emit("appointmentStatusUpdated", {
-//                 ...notifPayload,
-//                 _id: created._id,
-//                 createdAt: created.createdAt,
-//               });
-//             } else if (io) {
-//               logger.info(
-//                 `Recipient ${receiverId} not connected via socket. Notification saved to DB.`
-//               );
-//             }
-//           } catch (emitErr) {
-//             logger.warn("Failed to emit socket notification", emitErr);
-//           }
-//         }
-//       }
-
-//       // 7️⃣ Return response
-//       return responseData.success(
-//         res,
-//         { appointment, notified: shouldNotify ? recipientsArr : [] },
-//         messageConstants.DATA_SAVED_SUCCESSFULLY
-//       );
 //     } catch (error) {
 //       console.error("update appointment error:", error);
 //       return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
@@ -1476,148 +1429,165 @@ const updateAppointmentStatus = async (req, res) => {
 // };
 
 
+
 const updateAppointment = async (req, res) => {
-    return new Promise(async () => {
-        try {
-            const { reference_id, date, time_slot, visit_type, patient_id, patient_name } = req.body;
-            const actorId = req.userDetails?._id;
+  return new Promise(async () => {
+    try {
+      const { reference_id, date, time_slot, visit_type, patient_id, patient_name } = req.body;
+      const userDetails = req.userDetails;
 
-            // 1. Validate input
-            if (!reference_id) {
-                return responseData.fail(res, "reference_id is required", 400);
-            }
+      if (!reference_id) {
+        return responseData.fail(res, "reference_id is required", 400);
+      }
 
-            // 2. Fetch appointment
-            const appointment = await AppointmentSchema.findById(reference_id).populate("staff_id");
-            if (!appointment) {
-                return responseData.fail(res, "Appointment not found", 404);
-            }
+      // Fetch existing appointment
+      const appointment = await AppointmentSchema.findById(reference_id).populate("staff_id");
+      if (!appointment) {
+        return responseData.fail(res, "Appointment not found", 404);
+      }
 
-            // 3. Prepare new values (keep old if not provided)
-            const newDate = date || appointment.date;
-            const newTimeSlot = time_slot || appointment.time_slot;
-            const newVisitType = visit_type || appointment.visit_type;
-            const newPatientId = patient_id || appointment.patient_id;
+      // Prepare new values (keep old if not provided)
+      const newDate = date || appointment.date;
+      const newTimeSlot = time_slot || appointment.time_slot;
+      const newVisitType = visit_type || appointment.visit_type;
+      const newPatientId = patient_id || appointment.patient_id;
 
-            // const getAllBookingsForDoctor = async (doctorId, from, to) => {
-            //     return AppointmentSchema.find({
-            //         staff_id: doctorId,
-            //         date: { $gte: from, $lte: to }
-            //     });
-            // };
-            // 4. Validate against availability
+      // Validate against availability
+      const allBookings = await structureAppointmentHelper(appointment.staff_id, newDate, newDate);
+      const effectiveSlots = buildEffectiveSlots(allBookings, appointment);
+      const { start, end } = newTimeSlot;
+      const apptStart = toMinutes(start);
+      const apptEnd = toMinutes(end);
+      const mergedAvail = mergeSlots(effectiveSlots);
 
+      const isInsideAvailable = mergedAvail.some((a) => {
+        const availableStart = toMinutes(a.start);
+        const availableEnd = toMinutes(a.end);
+        return apptStart >= availableStart && apptEnd <= availableEnd;
+      });
 
-            const allBookings = await structureAppointmentHelper(appointment.staff_id, newDate, newDate);
+      if (!isInsideAvailable) {
+        return responseData.fail(
+          res,
+          `Selected time ${start}–${end} is not available for Dr. ${appointment.staff_id.firstname}.`,
+          400
+        );
+      }
 
-            console.log(allBookings, ">>> all the appoitments >>>")
+      // Update appointment details
+      appointment.date = newDate;
+      appointment.time_slot = newTimeSlot;
+      appointment.visit_type = newVisitType;
+      appointment.patient_id = newPatientId;
+      appointment.status = AppointmentStatus.CONFIRMED;
+      await appointment.save();
 
-            // helper you already have that returns slots + booked
+      // Format date/time for messages
+      const appointmentDate = new Date(newDate);
+      const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
 
-            const effectiveSlots = buildEffectiveSlots(allBookings, appointment);
+      const formatTimeTo12Hour = (timeString) => {
+        const [hours, minutes] = timeString.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const twelveHour = hour % 12 || 12;
+        return `${twelveHour}:${minutes} ${ampm}`;
+      };
 
-            console.log(effectiveSlots, ">> Effective slots")
-            // function that merges old appointment slot into available slots
+      const formattedStartTime = formatTimeTo12Hour(newTimeSlot?.start);
+      const formattedEndTime = formatTimeTo12Hour(newTimeSlot?.end);
 
-            const { start, end } = newTimeSlot;
-            const apptStart = toMinutes(start);
-            const apptEnd = toMinutes(end);
-            const mergedAvail = mergeSlots(effectiveSlots);
+      // Get all user references
+      const patient = await UserSchema.findById(newPatientId);
+      const doctor = await StaffSchema.findById(appointment.staff_id);
+      const admins = await UserSchema.find({ role: UserRole.ADMIN });
 
-            const isInsideAvailable = mergedAvail.some((a) => {
-                const availableStart = toMinutes(a.start);
-                const availableEnd = toMinutes(a.end);
-                return apptStart >= availableStart && apptEnd <= availableEnd;
-            });
+      const io = req.app.get('socketio');
+      const notifications = [];
 
-            if (!isInsideAvailable) {
-                return responseData.fail(
-                    res,
-                    `Selected time ${start}–${end} is not available for Dr. ${appointment.staff_id.firstname}.`,
-                    400
-                );
-            }
+      /** --------------------------------------------------
+       *  Notify Patient (appointment updated)
+       * -------------------------------------------------- */
+      if (patient) {
+        const patientMessage = `Your appointment has been updated to ${formattedDate} (${formattedStartTime} - ${formattedEndTime}). Assigned doctor: Dr. ${doctor?.firstname} ${doctor?.lastname}.`;
 
-            // 5. Update appointment
-            appointment.date = newDate;
-            appointment.time_slot = newTimeSlot;
-            appointment.visit_type = newVisitType;
-            appointment.patient_id = newPatientId;
-            appointment.status = AppointmentStatus.CONFIRMED; // reset until doctor confirms
-            await appointment.save();
+        const notif = await NotificationSchema.create({
+          sender_id: userDetails?._id,
+          receiver_id: patient._id,
+          type: NotificationType.APPOINTMENT_UPDATED,
+          message: patientMessage,
+          reference_id: appointment._id,
+          reference_model: "Appointment",
+          read: false
+        });
 
-            console.log(newDate, ">> new Date ")
+        notifications.push(notif);
 
-            // 6. Notify doctor
-            // const notifPayload = {
-            //     sender_id: actorId,
-            //     receiver_id: appointment.staff_id._id,
-            //     type: NotificationType.APPOINTMENT_UPDATED,
-            //     message: `Appointment has been updated to ${moment(newDate).format("YYYY-MM-DD")} (${newTimeSlot.start}-${newTimeSlot.end}). Please confirm.`,
-            //     reference_id: appointment._id,
-            //     reference_model: "Appointment",
-            //     read: false
-            // };
-
-            // const notification = await NotificationSchema.create(notifPayload);
-
-            // // emit via socket if doctor is online
-            // const io = req.app?.get("socketio");
-            // const socketRec = await SocketSchema.findOne({ user_id: appointment.staff_id._id });
-            // if (io && socketRec?.socket_id) {
-            //     io.to(socketRec.socket_id).emit("appointmentUpdated", {
-            //         ...notifPayload,
-            //         _id: notification._id,
-            //         createdAt: notification.createdAt
-            //     });
-            // }
-
-            const appointmentDate = new Date(date);
-            const formattedDate = `${String(appointmentDate.getDate()).padStart(2, '0')}/${String(appointmentDate.getMonth() + 1).padStart(2, '0')}/${appointmentDate.getFullYear()}`;
-            const formatTimeTo12Hour = (timeString) => {
-                const [hours, minutes] = timeString.split(':');
-                const hour = parseInt(hours);
-                const ampm = hour >= 12 ? 'PM' : 'AM';
-                const twelveHour = hour % 12 || 12;
-                return `${twelveHour}:${minutes} ${ampm}`;
-            };
-            const formattedStartTime = formatTimeTo12Hour(time_slot?.start);
-            const formattedEndTime = formatTimeTo12Hour(time_slot?.end);
-            const user = await UserSchema?.findOne({ staff_id: appointment?.staff_id });
-            const notification = await NotificationSchema.create({
-                sender_id: patient_id,
-                receiver_id: user?._id,
-                type: NotificationType.APPOINTMENT_REQUEST,
-                message: `Appointment request from patient ${patient_name} on ${date} (${time_slot})`,
-                reference_id: appointment._id,
-                reference_model: "Appointment",
-                read: false
-            });
-            const io = req.app.get('socketio');
-
-            const doctorSocket = await SocketSchema.findOne({ user_id: user._id });
-
-            io.to(`${doctorSocket.socket_id}`).emit("appointmentRequest", {
-                _id: notification?._id,
-                sender_id: patient_id,
-                receiver_id: user?._id,
-                type: NotificationType.APPOINTMENT_REQUEST,
-                // message: `Appointment request from patient ${patient_name} on ${date} (${time_slot?.start}-${time_slot?.end})`,
-                message: `Appointment request from patient ${patient_name} on ${formattedDate} (${formattedStartTime}-${formattedEndTime})`,
-                reference_id: appointment._id,
-                reference_model: "Appointment",
-                read: false
-            });
-
-
-            return responseData.success(res, { appointment }, messageConstants.DATA_UPDATED_SUCCESSFULLY);
-
-        } catch (error) {
-            console.error("update appointment error:", error);
-            return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+        // Emit via socket to patient
+        const patientSocket = await SocketSchema.findOne({ user_id: patient._id });
+        if (patientSocket && patientSocket.socket_id && io) {
+          io.to(patientSocket.socket_id).emit("appointmentStatusUpdated", {
+            ...notif.toObject(),
+            createdAt: notif.createdAt
+          });
         }
-    });
+
+        // Send WhatsApp message to patient
+        if (patient.phone) {
+          const templateParams = [
+            patient.firstname, // {{1}}
+            formattedDate,     // {{2}}
+            `${formattedStartTime} - ${formattedEndTime}`, // {{3}}
+            newVisitType,      // {{4}}
+            `${doctor?.firstname} ${doctor?.lastname}` // {{5}}
+          ];
+          await sendWhatsAppMessage(patient.phone, "appointment_update", templateParams);
+        }
+      }
+
+      /** --------------------------------------------------
+       *  Notify all Admins (appointment updated)
+       * -------------------------------------------------- */
+      for (const admin of admins) {
+        const adminMessage = `Appointment of ${patient?.firstname} ${patient?.lastname} has been updated to ${formattedDate} (${formattedStartTime} - ${formattedEndTime}). Assigned doctor: Dr. ${doctor?.firstname} ${doctor?.lastname}.`;
+
+        const notif = await NotificationSchema.create({
+          sender_id: userDetails?._id,
+          receiver_id: admin._id,
+          type: NotificationType.APPOINTMENT_UPDATED,
+          message: adminMessage,
+          reference_id: appointment._id,
+          reference_model: "Appointment",
+          read: false
+        });
+        notifications.push(notif);
+
+        // Emit via socket to admin
+        const adminSocket = await SocketSchema.findOne({ user_id: admin._id });
+        if (adminSocket && adminSocket.socket_id && io) {
+          io.to(adminSocket.socket_id).emit("appointmentStatusUpdated", {
+            ...notif.toObject(),
+            createdAt: notif.createdAt
+          });
+        }
+      }
+
+      logger.info("Appointment updated successfully", { appointment: appointment?._id });
+
+      return responseData.success(
+        res,
+        { ...appointment.toObject(), patient_status: appointment.patient_status },
+        messageConstants.DATA_UPDATED_SUCCESSFULLY
+      );
+
+    } catch (error) {
+      console.error("update appointment error:", error);
+      logger.error("Update appointment " + messageConstants.INTERNAL_SERVER_ERROR, error);
+      return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+    }
+  });
 };
+
 
 
 const updatePatientStatus = async (req, res) => {
@@ -1671,12 +1641,12 @@ const updatePatientStatus = async (req, res) => {
 };
 
 module.exports = {
-    createAppointment,
-    getAppontmentByDoctor,
-    getAppontmentByPatient,
-    getPatients,
-    updateAppointmentStatus,
-    updateAppointment,
-    getAppointmentList,
-    updatePatientStatus
+  createAppointment,
+  getAppontmentByDoctor,
+  getAppontmentByPatient,
+  getPatients,
+  updateAppointmentStatus,
+  updateAppointment,
+  getAppointmentList,
+  updatePatientStatus
 }

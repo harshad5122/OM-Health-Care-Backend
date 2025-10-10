@@ -48,6 +48,7 @@ const createAppointment = async (req, res) => {
 
             //  const message = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
              const patient = await UserSchema.findById(patient_id);
+             const doctor = await StaffSchema.findById(staff_id);
              const admins = await UserSchema.find({ role: UserRole.ADMIN });
 
              const io = req.app.get('socketio');

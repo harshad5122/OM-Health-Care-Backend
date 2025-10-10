@@ -138,7 +138,7 @@ try {
     
     // const templateParams = [userName, doctorInfo];
      const userName = `${savedUser.firstname} ${savedUser.lastname}`;
-    const doctorInfo = doctor ? `${doctor.firstname} ${doctor.lastname}` : "Not yet assigned";
+    const doctorInfo = doctor ? `${doctor.firstname} ${doctor.lastname} ( ${doctor.phone} )` : "Not yet assigned";
     const templateParams = [userName, doctorInfo];
  if (savedUser.role === UserTypes.USER) {
     if (savedUser.phone) {

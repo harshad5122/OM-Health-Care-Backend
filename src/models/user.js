@@ -112,7 +112,7 @@ const userSchema = mongoose.Schema({
     assign_doctor: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "staff",
-        required: true
+        required: false
     },
     status: {
         type: Number,

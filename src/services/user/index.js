@@ -137,12 +137,15 @@ try {
     // const doctorInfo = doctor ? `${doctor.firstname} ${doctor.lastname}` : "Not yet assigned";
     
     // const templateParams = [userName, doctorInfo];
-
+ if (savedUser.role === UserTypes.USER) {
     if (savedUser.phone) {
         // Call with template name and parameters
         await sendWhatsAppMessage(savedUser.phone, "hello_world", []);
     } else {
         logger.warn(`User ${savedUser._id} has no phone number to send WhatsApp message.`);
+    }
+    } else {
+        console.log(`User ${savedUser._id} is not of type USER, skipping WhatsApp message.`);
     }
 } catch (err) {
     logger.error("Error sending WhatsApp message:", err);

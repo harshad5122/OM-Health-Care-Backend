@@ -53,7 +53,7 @@ const createAppointment = async (req, res) => {
              const io = req.app.get('socketio');
             const notifications = [];
 
-            // 🔹 Notify patient
+            // Notify patient
       if (patient) {
         const notif = await NotificationSchema.create({
           sender_id: userDetails?._id,
@@ -76,7 +76,7 @@ const createAppointment = async (req, res) => {
         }
       }
 
-      // 🔹 Notify all admins
+      //  Notify all admins
       for (const admin of admins) {
         const notif = await NotificationSchema.create({
           sender_id: userDetails?._id,
@@ -1491,13 +1491,14 @@ const getPatients = async (req, res) => {
 //     })
 // }
 
+
 const updateAppointmentStatus = async (req, res) => {
   return new Promise(async () => {
     try {
-      const { reference_id, sender_id, status, message, notification_id } = req?.body;
-      const actorId = req.userDetails?._id;
+      const { reference_id, patient_id, status, message } = req?.body;
+      const userDetails = req.userDetails;
 
-      // 1️⃣ Validate inputs
+      // Validate input
       if (!reference_id) {
         return responseData.fail(res, "reference_id is required", 400);
       }
@@ -1506,7 +1507,7 @@ const updateAppointmentStatus = async (req, res) => {
         ![
           AppointmentStatus.CONFIRMED,
           AppointmentStatus.CANCELLED,
-          AppointmentStatus.COMPLETED
+          AppointmentStatus.COMPLETED,
         ].includes(status)
       ) {
         return responseData.fail(
@@ -1516,7 +1517,7 @@ const updateAppointmentStatus = async (req, res) => {
         );
       }
 
-      // 2️⃣ Fetch and update appointment
+      // Fetch appointment
       const appointment = await AppointmentSchema.findById(reference_id);
       if (!appointment) {
         return responseData.fail(res, "Appointment not found", 404);
@@ -1527,20 +1528,7 @@ const updateAppointmentStatus = async (req, res) => {
       appointment.message = message || "";
       await appointment.save();
 
-      // 3️⃣ Mark original notification as read if exists
-      if (notification_id) {
-        try {
-          await NotificationSchema.findByIdAndUpdate(notification_id, { read: true });
-        } catch (err) {
-          logger.warn("Failed to mark original notification as read", err);
-        }
-      }
-
-      // 4️⃣ Determine if notification should be sent
-      let shouldNotify = false;
-      let notifType = "";
-      let defaultMsg = "";
-
+      // Format date and time
       const appointmentDate = new Date(appointment.date);
       const formattedDate = `${String(appointmentDate.getDate()).padStart(2, "0")}/${String(
         appointmentDate.getMonth() + 1
@@ -1557,85 +1545,239 @@ const updateAppointmentStatus = async (req, res) => {
       const formattedStartTime = formatTimeTo12Hour(appointment.time_slot?.start);
       const formattedEndTime = formatTimeTo12Hour(appointment.time_slot?.end);
 
-      // ✅ CONFIRMED → CANCELLED
-      if (oldStatus === AppointmentStatus.CONFIRMED && status === AppointmentStatus.CANCELLED) {
-        shouldNotify = true;
-        notifType = NotificationType.APPOINTMENT_CANCELLED || "APPOINTMENT_CANCELLED";
-        defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been declined.`;
-      }
+      // Build message based on new status
+      let notifType = "";
+      let defaultMsg = "";
 
-      // ✅ CANCELLED → CONFIRMED
-      else if (oldStatus === AppointmentStatus.CANCELLED && status === AppointmentStatus.CONFIRMED) {
-        shouldNotify = true;
-        notifType = NotificationType.APPOINTMENT_CONFIRMED || "APPOINTMENT_CONFIRMED";
+      if (status === AppointmentStatus.CONFIRMED) {
+        notifType = NotificationType.APPOINTMENT_CONFIRMED;
         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
+      } else if (status === AppointmentStatus.CANCELLED) {
+        notifType = NotificationType.APPOINTMENT_CANCELLED;
+        defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been cancelled.`;
+      } else if (status === AppointmentStatus.COMPLETED) {
+        notifType = NotificationType.APPOINTMENT_COMPLETED;
+        defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been completed.`;
       }
 
-      // ⚠️ CONFIRMED → COMPLETED → No notification
-      else if (oldStatus === AppointmentStatus.CONFIRMED && status === AppointmentStatus.COMPLETED) {
-        shouldNotify = false;
-      }
+      // Fetch patient and all admins
+      const patient = await UserSchema.findById(patient_id);
+      const admins = await UserSchema.find({ role: UserRole.ADMIN });
 
-      // 5️⃣ Build recipients
-      const recipients = new Set();
-      if (sender_id) recipients.add(String(sender_id));
-      if (appointment.creator) recipients.add(appointment.creator.toString());
-      if (actorId) recipients.delete(String(actorId)); // remove doctor if same
+      const io = req.app.get("socketio");
+      const notifications = [];
 
-      const recipientsArr = Array.from(recipients);
-      const io = req.app?.get("socketio");
+      // Notify patient
+      if (patient) {
+        const notif = await NotificationSchema.create({
+          sender_id: userDetails?._id,
+          receiver_id: patient._id,
+          type: notifType,
+          message: defaultMsg,
+          reference_id: appointment._id,
+          reference_model: "Appointment",
+          read: false,
+        });
+        notifications.push(notif);
 
-      // 6️⃣ Send notification (only if needed)
-      if (shouldNotify) {
-        const createdNotifications = [];
-
-        for (const receiverId of recipientsArr) {
-          const notifPayload = {
-            sender_id: actorId || null,
-            receiver_id: receiverId,
-            type: notifType,
-            message: defaultMsg,
-            reference_id: appointment._id,
-            reference_model: "Appointment",
-            read: false,
-            reason: message,
-          };
-
-          const created = await NotificationSchema.create(notifPayload);
-          createdNotifications.push(created);
-
-          // emit via socket
-          try {
-            const socketRec = await SocketSchema.findOne({ user_id: receiverId });
-            if (io && socketRec && socketRec.socket_id) {
-              io.to(socketRec.socket_id).emit("appointmentStatusUpdated", {
-                ...notifPayload,
-                _id: created._id,
-                createdAt: created.createdAt,
-              });
-            } else if (io) {
-              logger.info(
-                `Recipient ${receiverId} not connected via socket. Notification saved to DB.`
-              );
-            }
-          } catch (emitErr) {
-            logger.warn("Failed to emit socket notification", emitErr);
-          }
+        // Send via socket
+        const patientSocket = await SocketSchema.findOne({ user_id: patient._id });
+        if (patientSocket && patientSocket.socket_id && io) {
+          io.to(patientSocket.socket_id).emit("appointmentStatusUpdated", {
+            ...notif.toObject(),
+            createdAt: notif.createdAt,
+          });
         }
       }
 
-      // 7️⃣ Return response
+      // Notify all admins
+      for (const admin of admins) {
+        const notif = await NotificationSchema.create({
+          sender_id: userDetails?._id,
+          receiver_id: admin._id,
+          type: notifType,
+          message: defaultMsg,
+          reference_id: appointment._id,
+          reference_model: "Appointment",
+          read: false,
+        });
+        notifications.push(notif);
+
+        const adminSocket = await SocketSchema.findOne({ user_id: admin._id });
+        if (adminSocket && adminSocket.socket_id && io) {
+          io.to(adminSocket.socket_id).emit("appointmentStatusUpdated", {
+            ...notif.toObject(),
+            createdAt: notif.createdAt,
+          });
+        }
+      }
+
+      logger.info("Appointment status updated successfully", {
+        appointment: appointment?._id,
+        newStatus: status,
+      });
+
       return responseData.success(
         res,
-        { appointment, notified: shouldNotify ? recipientsArr : [] },
+        {
+          ...appointment.toObject(),
+          notified: notifications.length,
+        },
         messageConstants.DATA_SAVED_SUCCESSFULLY
       );
     } catch (error) {
       console.error("update appointment error:", error);
+      logger.error("Update appointment " + messageConstants.INTERNAL_SERVER_ERROR, error);
       return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
     }
   });
 };
+
+
+// const updateAppointmentStatus = async (req, res) => {
+//   return new Promise(async () => {
+//     try {
+//       const { reference_id, sender_id, status, message, notification_id } = req?.body;
+//       const actorId = req.userDetails?._id;
+
+//       // 1️⃣ Validate inputs
+//       if (!reference_id) {
+//         return responseData.fail(res, "reference_id is required", 400);
+//       }
+//       if (
+//         !status ||
+//         ![
+//           AppointmentStatus.CONFIRMED,
+//           AppointmentStatus.CANCELLED,
+//           AppointmentStatus.COMPLETED
+//         ].includes(status)
+//       ) {
+//         return responseData.fail(
+//           res,
+//           "Invalid status. Must be CONFIRMED, CANCELLED or COMPLETED.",
+//           400
+//         );
+//       }
+
+//       // 2️⃣ Fetch and update appointment
+//       const appointment = await AppointmentSchema.findById(reference_id);
+//       if (!appointment) {
+//         return responseData.fail(res, "Appointment not found", 404);
+//       }
+
+//       const oldStatus = appointment.status;
+//       appointment.status = status;
+//       await appointment.save();
+
+//       // 3️⃣ Mark original notification as read if exists
+//       if (notification_id) {
+//         try {
+//           await NotificationSchema.findByIdAndUpdate(notification_id, { read: true });
+//         } catch (err) {
+//           logger.warn("Failed to mark original notification as read", err);
+//         }
+//       }
+
+//       // 4️⃣ Determine if notification should be sent
+//       let shouldNotify = false;
+//       let notifType = "";
+//       let defaultMsg = "";
+
+//       const appointmentDate = new Date(appointment.date);
+//       const formattedDate = `${String(appointmentDate.getDate()).padStart(2, "0")}/${String(
+//         appointmentDate.getMonth() + 1
+//       ).padStart(2, "0")}/${appointmentDate.getFullYear()}`;
+
+//       const formatTimeTo12Hour = (timeString) => {
+//         const [hours, minutes] = timeString.split(":");
+//         const hour = parseInt(hours);
+//         const ampm = hour >= 12 ? "PM" : "AM";
+//         const twelveHour = hour % 12 || 12;
+//         return `${twelveHour}:${minutes} ${ampm}`;
+//       };
+
+//       const formattedStartTime = formatTimeTo12Hour(appointment.time_slot?.start);
+//       const formattedEndTime = formatTimeTo12Hour(appointment.time_slot?.end);
+
+//       // ✅ CONFIRMED → CANCELLED
+//       if (oldStatus === AppointmentStatus.CONFIRMED && status === AppointmentStatus.CANCELLED) {
+//         shouldNotify = true;
+//         notifType = NotificationType.APPOINTMENT_CANCELLED || "APPOINTMENT_CANCELLED";
+//         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been declined.`;
+//       }
+
+//       // ✅ CANCELLED → CONFIRMED
+//       else if (oldStatus === AppointmentStatus.CANCELLED && status === AppointmentStatus.CONFIRMED) {
+//         shouldNotify = true;
+//         notifType = NotificationType.APPOINTMENT_CONFIRMED || "APPOINTMENT_CONFIRMED";
+//         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
+//       }
+
+//       // ⚠️ CONFIRMED → COMPLETED → No notification
+//       else if (oldStatus === AppointmentStatus.CONFIRMED && status === AppointmentStatus.COMPLETED) {
+//         shouldNotify = false;
+//       }
+
+//       // 5️⃣ Build recipients
+//       const recipients = new Set();
+//       if (sender_id) recipients.add(String(sender_id));
+//       if (appointment.creator) recipients.add(appointment.creator.toString());
+//       if (actorId) recipients.delete(String(actorId)); // remove doctor if same
+
+//       const recipientsArr = Array.from(recipients);
+//       const io = req.app?.get("socketio");
+
+//       // 6️⃣ Send notification (only if needed)
+//       if (shouldNotify) {
+//         const createdNotifications = [];
+
+//         for (const receiverId of recipientsArr) {
+//           const notifPayload = {
+//             sender_id: actorId || null,
+//             receiver_id: receiverId,
+//             type: notifType,
+//             message: defaultMsg,
+//             reference_id: appointment._id,
+//             reference_model: "Appointment",
+//             read: false,
+//             reason: message,
+//           };
+
+//           const created = await NotificationSchema.create(notifPayload);
+//           createdNotifications.push(created);
+
+//           // emit via socket
+//           try {
+//             const socketRec = await SocketSchema.findOne({ user_id: receiverId });
+//             if (io && socketRec && socketRec.socket_id) {
+//               io.to(socketRec.socket_id).emit("appointmentStatusUpdated", {
+//                 ...notifPayload,
+//                 _id: created._id,
+//                 createdAt: created.createdAt,
+//               });
+//             } else if (io) {
+//               logger.info(
+//                 `Recipient ${receiverId} not connected via socket. Notification saved to DB.`
+//               );
+//             }
+//           } catch (emitErr) {
+//             logger.warn("Failed to emit socket notification", emitErr);
+//           }
+//         }
+//       }
+
+//       // 7️⃣ Return response
+//       return responseData.success(
+//         res,
+//         { appointment, notified: shouldNotify ? recipientsArr : [] },
+//         messageConstants.DATA_SAVED_SUCCESSFULLY
+//       );
+//     } catch (error) {
+//       console.error("update appointment error:", error);
+//       return responseData.fail(res, messageConstants.INTERNAL_SERVER_ERROR, 500);
+//     }
+//   });
+// };
 
 
 const updateAppointment = async (req, res) => {

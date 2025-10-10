@@ -796,7 +796,7 @@ const getAppointmentList = async (req, res) => {
         model: UserSchema,
         select: 'firstname lastname phone address countryCode city state country'
       })
-      .sort({ date: 1 }); // optional: sort by date
+      .sort({ createdAt: -1  }); // optional: sort by date
 
     const formattedAppointments = appointments.map((apt) => {
       const patient = apt.patient_id || {};

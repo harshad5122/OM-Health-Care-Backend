@@ -136,7 +136,7 @@ const getLeavesByProvider = async (req, res) => {
   return new Promise(async () => {
     try {
       const staff_id = req.params?._id;  // provider ID from URL
-      const { start_date, end_date } = req.query; // optional filters
+      const { from, to  } = req.query; // optional filters
 
       if (!staff_id) {
         return res.status(400).json({
@@ -148,14 +148,26 @@ const getLeavesByProvider = async (req, res) => {
       let query = { staff_id };
 
       // optional date range filter
-      if (start_date && end_date) {
-        query.$or = [
-          {
-            start_date: { $lte: new Date(end_date) },
-            end_date: { $gte: new Date(start_date) },
-          }
-        ];
-      }
+      // if (start_date && end_date) {
+      //   query.$or = [
+      //     {
+      //       start_date: { $lte: new Date(end_date) },
+      //       end_date: { $gte: new Date(start_date) },
+      //     }
+      //   ];
+      // }
+
+      if (from && to) {
+      const fromDate = new Date(from);
+      const toDate = new Date(to);
+
+      query.$or = [
+        {
+          start_date: { $lte: toDate },
+          end_date: { $gte: fromDate },
+        },
+      ];
+    }
 
       const leaves = await StaffLeaveSchema.find(query)
         .sort({ createdAt: -1 })

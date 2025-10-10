@@ -127,12 +127,12 @@ const sendWhatsAppMessage = async (to, templateName, templateParams = []) => {
       template: {
         name: templateName, // The name of your template, e.g., "user_welcome"
         language: {
-          code: "en_US", // Or the language code you used
+          code: "en", // Or the language code you used
         },
         components: [
           {
             type: "body",
-            parameters: templateParams.map(param => ({ type: "text", text: param })),
+            parameters: templateParams.map(param => ({ type: "text", text:  String(param) })),
           },
         ],
       },
@@ -159,7 +159,7 @@ const sendWhatsAppMessage = async (to, templateName, templateParams = []) => {
     if (data.error) {
       logger.error("WhatsApp send error:", JSON.stringify(data.error));
     } else {
-      logger.info(`✅ WhatsApp message sent to ${cleanNumber}`);
+      logger.info(` WhatsApp message sent to ${cleanNumber}`);
     }
   } catch (error) {
     logger.error("Error in sendWhatsAppMessage function:", error);

@@ -733,330 +733,336 @@ const getAppontmentByPatient = async (req, res) => {
 // }
 
 const getAppointmentList = async (req, res) => {
-  return new Promise(async () => {
-    try {
-      const staffId = req.params._id;
-      const skip = req.query.skip ? parseInt(req.query.skip, 10) : 0;
-      const limit = (req.query.limit && parseInt(req.query.limit, 10) > 0)
-        ? parseInt(req.query.limit, 10)
-        : null;
-      const search = (req.query.search || "").trim();
-      const { from, to, status } = req.query;
+    return new Promise(async () => {
+        try {
+            const staffId = req.params._id;
+            const skip = req.query.skip ? parseInt(req.query.skip, 10) : 0;
+            const limit = (req.query.limit && parseInt(req.query.limit, 10) > 0)
+                ? parseInt(req.query.limit, 10)
+                : null;
+            const search = (req.query.search || "").trim();
+            const { from, to, status } = req.query;
 
-      if (!staffId) {
-        return responseData.fail(res, "Staff ID is required", 400);
-      }
+            if (!staffId || !mongoose.Types.ObjectId.isValid(staffId)) {
+                return responseData.fail(res, "A valid Staff ID is required", 400);
+            }
 
-      // Date filter setup
-      const filter = {
-        staff_id: staffId,
-      };
+            const initialMatch = {
+                staff_id: new mongoose.Types.ObjectId(staffId),
+            };
 
-      const match = {
-        staff_id: new mongoose.Types.ObjectId(staffId),
-      };
+            if (from && to) {
+                initialMatch.date = {
+                    $gte: new Date(from),
+                    $lte: new Date(to),
+                };
+            }
 
-      if (from && to) {
-        match.date = {
-          $gte: new Date(from),
-          $lte: new Date(to),
-        };
-      }
+            if (status) {
+                const statusArray = status.split(",").map((s) => s.trim());
+                initialMatch.status = (statusArray.length === 1)
+                    ? statusArray[0]
+                    : { $in: statusArray };
+            }
 
+            
+            const searchMatch = {};
+            if (search) {
+                searchMatch.$or = [
+                    
+                    { "patientDetails.firstname": { $regex: search, $options: "i" } },
+                    { "patientDetails.lastname": { $regex: search, $options: "i" } },
+                    { "patientDetails.phone": { $regex: search, $options: "i" } },
+                    { "patientDetails.email": { $regex: search, $options: "i" } },
+                   
+                    { "patient_fullname": { $regex: search, $options: "i" } },
+                ];
+            }
 
-      if (status) {
-        const statusArray = status.split(",").map((s) => s.trim());
-        match.status = (statusArray.length === 1)
-          ? statusArray[0]
-          : { $in: statusArray };
-      }
+            const pipeline = [
+                { $match: initialMatch },
 
-      if (search) {
-        match.$or = [
-          { "patientDetails.firstname": { $regex: search, $options: "i" } },
-          { "patientDetails.lastname": { $regex: search, $options: "i" } },
-          { "patientDetails.phone": { $regex: search, $options: "i" } },
-          { "patientDetails.email": { $regex: search, $options: "i" } },
-        ];
-      }
-
-
-      const pipeline = [
-        { $match: { staff_id: new mongoose.Types.ObjectId(staffId) } },
-        {
-          $lookup: {
-            from: "users",
-            localField: "patient_id",
-            foreignField: "_id",
-            as: "patientDetails",
-          },
-        },
-
-        {
-          $unwind: {
-            path: "$patientDetails",
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-
-
-        { $match: match },
-
-
-        { $sort: { createdAt: -1 } },
-
-
-        {
-          $facet: {
-
-            data: [
-
-              ...(limit !== null ? [{ $skip: skip }, { $limit: limit }] : []),
-
-              {
-                $project: {
-                  _id: 1,
-                  staff_id: 1,
-                  patient_id: "$patientDetails._id",
-                  date: 1,
-                  time_slot: 1,
-                  visit_type: 1,
-                  status: 1,
-                  message: { $ifNull: ["$message", ""] },
-                  created_by: 1,
-                  creator: 1,
-                  createdAt: 1,
-                  updatedAt: 1,
-                  patient_name: {
-                    $concat: [
-                      "$patientDetails.firstname",
-                      " ",
-                      "$patientDetails.lastname",
-                    ],
-                  },
-                  patient_phone: {
-                    $concat: [
-                      "$patientDetails.countryCode",
-                      "$patientDetails.phone",
-                    ],
-                  },
-                  patient_address: "$patientDetails.address",
-                  patient_city: "$patientDetails.city",
-                  patient_state: "$patientDetails.state",
-                  patient_country: "$patientDetails.country",
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "patient_id",
+                        foreignField: "_id",
+                        as: "patientDetails",
+                    },
                 },
-              },
-            ],
-            totalCount: [{ $count: "count" }],
-          },
-        },
-      ];
 
-      const result = await AppointmentSchema.aggregate(pipeline);
+                {
+                    $unwind: {
+                        path: "$patientDetails",
+                        preserveNullAndEmptyArrays: true,
+                    },
+                },
 
-      const appointments = result[0].data || [];
-      const totalCount = result[0].totalCount[0]?.count || 0;
+                {
+                    $addFields: {
+                        patient_fullname: {
+                            $concat: [
+                                { $ifNull: ["$patientDetails.firstname", ""] },
+                                " ",
+                                { $ifNull: ["$patientDetails.lastname", ""] }
+                            ]
+                        }
+                    }
+                },
 
-      logger.info("Appointments fetched successfully");
+                ...(search ? [{ $match: searchMatch }] : []),
+                
+                { $sort: { createdAt: -1 } },
+              
+                {
+                    $facet: {
+                        data: [
+                            ...(limit !== null ? [{ $skip: skip }, { $limit: limit }] : []),
+                            {
+                                $project: {
+                                    _id: 1,
+                                    staff_id: 1,
+                                    patient_id: "$patientDetails._id",
+                                    date: 1,
+                                    time_slot: 1,
+                                    visit_type: 1,
+                                    status: 1,
+                                    message: { $ifNull: ["$message", ""] },
+                                    created_by: 1,
+                                    creator: 1,
+                                    createdAt: 1,
+                                    updatedAt: 1,
+                                    patient_name: "$patient_fullname",
+                                    patient_phone: {
+                                        $concat: [
+                                            "$patientDetails.countryCode",
+                                            "$patientDetails.phone",
+                                        ],
+                                    },
+                                    patient_address: "$patientDetails.address",
+                                    patient_city: "$patientDetails.city",
+                                    patient_state: "$patientDetails.state",
+                                    patient_country: "$patientDetails.country",
+                                },
+                            },
+                        ],
+                        totalCount: [{ $count: "count" }],
+                    },
+                },
+            ];
 
-      return responseData.success(
-        res,
-        // appointments,
-        {
-          rows: appointments, // Send data under a 'rows' key
-          total_count: totalCount, // Send count in the same object
-        },
-        messageConstants.DATA_FETCHED_SUCCESSFULLY
-      );
+            const result = await AppointmentSchema.aggregate(pipeline);
 
-    } catch (error) {
-      logger.error("Get Appointment List " + messageConstants.INTERNAL_SERVER_ERROR, error);
-      return responseData.fail(
-        res,
-        messageConstants.INTERNAL_SERVER_ERROR,
-        500
-      );
-    }
-  })
+            const appointments = result[0].data || [];
+            const totalCount = result[0].totalCount[0]?.count || 0;
+
+            logger.info("Appointments fetched successfully");
+
+            return responseData.success(
+                res,
+                {
+                    rows: appointments,
+                    total_count: totalCount,
+                },
+                messageConstants.DATA_FETCHED_SUCCESSFULLY
+            );
+
+        } catch (error) {
+            logger.error("Get Appointment List " + messageConstants.INTERNAL_SERVER_ERROR, error);
+            return responseData.fail(
+                res,
+                messageConstants.INTERNAL_SERVER_ERROR,
+                500
+            );
+        }
+    })
 };
 
 
 const getPatients = async (req, res) => {
-  return new Promise(async () => {
-    try {
-      const {
-        doctor_id = null,
-        search = "",
-        skip,
-        limit,
-        from_date,
-        to_date,
-        patient_status,
-      } = req.query;
+    return new Promise(async () => {
+        try {
+            const {
+                doctor_id = null,
+                search = "",
+                skip,
+                limit,
+                from_date,
+                to_date,
+                patient_status,
+            } = req.query;
 
-      const skipVal = skip && !isNaN(skip) ? parseInt(skip) : 0;
-      const limitVal = limit && !isNaN(limit) ? parseInt(limit) : null;
+            const skipVal = skip && !isNaN(skip) ? parseInt(skip) : 0;
+            const limitVal = limit && !isNaN(limit) ? parseInt(limit) : null;
 
-      // 🔹 Base match condition for patients
-      const match = {
-        role: UserTypes.USER,
-        is_deleted: false,
-      };
+           
+            const match = {
+                role: UserTypes.USER,
+                is_deleted: false,
+            };
 
-      // 🔹 Search filter
-      if (search) {
-        match.$or = [
-          { firstname: { $regex: search, $options: "i" } },
-          { lastname: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phone: { $regex: search, $options: "i" } },
-          {
-            $expr: {
-              $regexMatch: {
-                input: { $toString: "$phone" },
-                regex: search,
-                options: "i",
-              },
-            },
-          },
-        ];
-      }
+            
+            let dateFilter = {};
+            if (from_date) dateFilter.$gte = new Date(from_date);
+            if (to_date) dateFilter.$lte = new Date(to_date);
+            if (Object.keys(dateFilter).length > 0) {
+                match.created_at = dateFilter;
+            }
 
-      // 🔹 Date range filter (created_at)
-      let dateFilter = {};
-      if (from_date) dateFilter.$gte = new Date(from_date);
-      if (to_date) dateFilter.$lte = new Date(to_date);
-      if (Object.keys(dateFilter).length > 0) {
-        match.created_at = dateFilter;
-      }
+           
+            if (doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)) {
+                match.assign_doctor = new mongoose.Types.ObjectId(doctor_id);
+            }
 
-      // 🔹 Filter by assigned doctor
-      if (doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)) {
-        match.assign_doctor = new mongoose.Types.ObjectId(doctor_id);
-      }
+          
+            const searchMatch = {};
+            if (search) {
+                searchMatch.$or = [
+                    { firstname: { $regex: search, $options: "i" } },
+                    { lastname: { $regex: search, $options: "i" } },
+                    { email: { $regex: search, $options: "i" } },
+                    { phone: { $regex: search, $options: "i" } },
+                    
+                    { fullname: { $regex: search, $options: "i" } },
+                ];
+            }
 
-      // 🔹 Aggregation pipeline
-      const pipeline = [
-        { $match: match },
+          
+            const pipeline = [
+               
+                { $match: match },
 
-        // Join appointments for each patient
-        {
-          $lookup: {
-            from: "appointments",
-            let: { patientId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $eq: ["$patient_id", "$$patientId"],
-                  },
-                  ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
-                    ? { staff_id: new mongoose.Types.ObjectId(doctor_id) }
-                    : {}),
+                
+                {
+                    $addFields: {
+                        fullname: {
+                            $concat: [
+                                { $ifNull: ["$firstname", ""] },
+                                " ",
+                                { $ifNull: ["$lastname", ""] }
+                            ]
+                        }
+                    }
                 },
-              },
-              { $sort: { createdAt: -1 } },
-            ],
-            as: "appointments",
-          },
-        },
 
+             
+                ...(search ? [{ $match: searchMatch }] : []),
 
-        // Add visit_count field
-        {
-          $addFields: {
-            patient_status: { $arrayElemAt: ["$appointments.patient_status", 0] },
-            patient_message: { $arrayElemAt: ["$appointments.patient_message", 0] },
-            visit_count: {
-              $size: {
-                $filter: {
-                  input: "$appointments",
-                  as: "appt",
-                  cond: { $eq: ["$$appt.status", AppointmentStatus.COMPLETED] }
+             
+                {
+                    $lookup: {
+                        from: "appointments",
+                        let: { patientId: "$_id" },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: { $eq: ["$patient_id", "$$patientId"] },
+                                    ...(doctor_id && mongoose.Types.ObjectId.isValid(doctor_id)
+                                        ? { staff_id: new mongoose.Types.ObjectId(doctor_id) }
+                                        : {}),
+                                },
+                            },
+                            { $sort: { createdAt: -1 } },
+                        ],
+                        as: "appointments",
+                    },
+                },
+
+                {
+                    $addFields: {
+                        patient_status: { $arrayElemAt: ["$appointments.patient_status", 0] },
+                        patient_message: { $arrayElemAt: ["$appointments.patient_message", 0] },
+                        visit_count: {
+                            $size: {
+                                $filter: {
+                                    input: "$appointments",
+                                    as: "appt",
+                                    cond: { $eq: ["$$appt.status", AppointmentStatus.COMPLETED] }
+                                }
+                            }
+                        },
+                        total_appointments: { $size: "$appointments" },
+                    },
+                },
+
+              
+                ...(patient_status
+                    ? [{
+                        $match: {
+                            patient_status: {
+                                $in: patient_status.split(",").map((s) => s.trim()),
+                            },
+                        },
+                    }]
+                    : []),
+
+             
+                { $sort: { created_at: -1 } },
+
+            
+                {
+                    $facet: {
+                        data: [
+                            { $skip: skipVal },
+                            ...(limitVal !== null ? [{ $limit: limitVal }] : []),
+                            {
+                                $project: {
+                                    _id: 1,
+                                    firstname: 1,
+                                    lastname: 1,
+                                    email: 1,
+                                    phone: 1,
+                                    address: 1,
+                                    country: 1,
+                                    state: 1,
+                                    city: 1,
+                                    gender: 1,
+                                    assign_doctor: 1,
+                                    patient_status: 1,
+                                    patient_message: 1,
+                                    dob: {
+                                        $cond: {
+                                            if: { $ifNull: ["$dob", false] },
+                                            then: { $dateToString: { format: "%d/%m/%Y", date: "$dob" } },
+                                            else: null,
+                                        },
+                                    },
+                                    visit_count: 1,
+                                    total_appointments: 1,
+                                },
+                            },
+                        ],
+                        totalCount: [
+                            { $count: 'count' }
+                        ]
+                    }
                 }
-              }
-            },
-            total_appointments: { $size: "$appointments" },
-          },
-        },
+            ];
 
-        ...(patient_status
-          ? [
-            {
-              $match: {
-                patient_status: {
-                  $in: patient_status.split(",").map((s) => s.trim()),
+           
+            const result = await UserSchema.aggregate(pipeline);
+
+            const patients = result[0].data || [];
+            const totalCount = result[0].totalCount[0]?.count || 0;
+
+            return responseData.success(
+                res,
+                {
+                    rows: patients,
+                    total_count: totalCount,
                 },
-              },
-            },
-          ]
-          : []),
+                messageConstants.FETCHED_SUCCESSFULLY
+            );
 
-
-
-        // Sort latest first
-        { $sort: { created_at: -1 } },
-
-        // Pagination
-        ...(limitVal ? [{ $skip: skipVal }, { $limit: limitVal }] : []),
-
-        // Project only needed fields
-        {
-          $project: {
-            _id: 1,
-            firstname: 1,
-            lastname: 1,
-            email: 1,
-            phone: 1,
-            address: 1,
-            country: 1,
-            state: 1,
-            city: 1,
-            gender: 1,
-            assign_doctor: 1,
-            patient_status: 1,
-            patient_message: 1,
-            dob: {
-              $cond: {
-                if: { $ifNull: ["$dob", false] },
-                then: { $dateToString: { format: "%d/%m/%Y", date: "$dob" } },
-                else: null,
-              },
-            },
-            visit_count: 1,
-            total_appointments: 1,
-          },
-        },
-      ];
-
-      // Execute aggregation and count
-      const [patients, totalCount] = await Promise.all([
-        UserSchema.aggregate(pipeline),
-        UserSchema.countDocuments(match),
-        // Count total unique patients matching filters
-
-
-      ]);
-
-      return responseData.success(
-        res,
-        // patients,
-        messageConstants.FETCHED_SUCCESSFULLY,
-        {
-          rows: patients,
-          total_count: totalCount,
-        },
-
-      );
-    } catch (error) {
-      logger.error("Get Patients Error:", error);
-      return responseData.fail(
-        res,
-        messageConstants.INTERNAL_SERVER_ERROR,
-        500
-      );
-    }
-  })
+        } catch (error) {
+            logger.error("Get Patients Error:", error);
+            return responseData.fail(
+                res,
+                messageConstants.INTERNAL_SERVER_ERROR,
+                500
+            );
+        }
+    })
 };
 
 

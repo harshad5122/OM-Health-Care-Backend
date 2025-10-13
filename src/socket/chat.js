@@ -42,10 +42,11 @@ module.exports = (io) => {
             onlineUsers.set(userId, socket.id);
 
             // Clear any previous timeout if exists
-            if (userTimeouts.has(userId)) {
-                clearTimeout(userTimeouts.get(userId));
-                userTimeouts.delete(userId);
-            }
+
+            // if (userTimeouts.has(userId)) {
+            //     clearTimeout(userTimeouts.get(userId));
+            //     userTimeouts.delete(userId);
+            // }
 
 
             const updatedUser = await User.findByIdAndUpdate(
@@ -60,50 +61,51 @@ module.exports = (io) => {
             io.emit('presence_update', { userId, isOnline: true });
 
             // Set timeout to mark user as offline after 2 minutes of inactivity
-            const timeout = setTimeout(async () => {
-                onlineUsers.delete(userId);
-                userTimeouts.delete(userId);
 
-                const offlineUser = await User.findByIdAndUpdate(
-                    userId,
-                    { is_online: false, last_seen: new Date() },
-                    { new: true }
-                );
-                logger.info(`User is_online: ${offlineUser.is_online} (timed out)`);
+            // const timeout = setTimeout(async () => {
+            //     onlineUsers.delete(userId);
+            //     userTimeouts.delete(userId);
 
-                io.emit('presence_update', { userId, isOnline: false });
-                logger.info(`User ${userId} marked offline after 2 minutes of inactivity`);
-            }, 2 * 60 * 1000); // 2 minutes
-            userTimeouts.set(userId, timeout);
+            //     const offlineUser = await User.findByIdAndUpdate(
+            //         userId,
+            //         { is_online: false, last_seen: new Date() },
+            //         { new: true }
+            //     );
+            //     logger.info(`User is_online: ${offlineUser.is_online} (timed out)`);
+
+            //     io.emit('presence_update', { userId, isOnline: false });
+            //     logger.info(`User ${userId} marked offline after 2 minutes of inactivity`);
+            // }, 2 * 60 * 1000); // 2 minutes
+            // userTimeouts.set(userId, timeout);
         });
 
-        socket.on('user_left_message_page', async (userId) => {
-            logger.info(`User ${userId} left message page`);
+        // socket.on('user_left_message_page', async (userId) => {
+        //     logger.info(`User ${userId} left message page`);
 
-            if (userTimeouts.has(userId)) {
-                clearTimeout(userTimeouts.get(userId));
-                userTimeouts.delete(userId);
-            }
+        //     if (userTimeouts.has(userId)) {
+        //         clearTimeout(userTimeouts.get(userId));
+        //         userTimeouts.delete(userId);
+        //     }
 
-            // Start 2-minute timer before setting user offline
-            const timeout = setTimeout(async () => {
-                onlineUsers.delete(userId);
-                userTimeouts.delete(userId);
+        //     // Start 2-minute timer before setting user offline
+        //     const timeout = setTimeout(async () => {
+        //         onlineUsers.delete(userId);
+        //         userTimeouts.delete(userId);
 
-                const offlineUser = await User.findByIdAndUpdate(
-                    userId,
-                    { is_online: false, last_seen: new Date() },
-                    { new: true }
-                );
-                logger.info(`User is_online: ${offlineUser.is_online} (left page)`);
+        //         const offlineUser = await User.findByIdAndUpdate(
+        //             userId,
+        //             { is_online: false, last_seen: new Date() },
+        //             { new: true }
+        //         );
+        //         logger.info(`User is_online: ${offlineUser.is_online} (left page)`);
 
 
-                io.emit('presence_update', { userId, isOnline: false });
-                logger.info(`User ${userId} marked offline after 2 minutes of inactivity`);
-            }, 2 * 60 * 1000);
+        //         io.emit('presence_update', { userId, isOnline: false });
+        //         logger.info(`User ${userId} marked offline after 2 minutes of inactivity`);
+        //     }, 2 * 60 * 1000);
 
-            userTimeouts.set(userId, timeout);
-        });
+        //     userTimeouts.set(userId, timeout);
+        // });
 
         socket.on('disconnect', () => {
             logger.info("Socket disconnected:", socket.id);
@@ -313,7 +315,7 @@ module.exports = (io) => {
         // });
 
 
-         socket.on('chat_message', async (data) => {
+        socket.on('chat_message', async (data) => {
             try {
                 // --- FIX: Capture the tempId sent from the frontend ---
                 const { tempId, ...messageData } = data;
@@ -337,14 +339,14 @@ module.exports = (io) => {
 
                 const attachmentDetails = (populatedMessage && Array.isArray(populatedMessage.attechment_id))
                     ? populatedMessage.attechment_id.map(file => ({
-                          id: file._id,
-                          fileType: file.fileType,
-                          name: file.name,
-                          size: file.size,
-                          url: file.url
-                      }))
+                        id: file._id,
+                        fileType: file.fileType,
+                        name: file.name,
+                        size: file.size,
+                        url: file.url
+                    }))
                     : [];
-                
+
                 const fullMessageForReceiver = {
                     ...populatedMessage.toObject(),
                     attechment_details: attachmentDetails
@@ -353,7 +355,7 @@ module.exports = (io) => {
                 const receiverSocketData = await SocketSchema.findOne({ user_id: data.receiver_id });
                 let finalMessageStatus = MessageStatus.SENT; // Default to 'sent'
 
-               // CREATE NOTIFICATION in DB
+                // CREATE NOTIFICATION in DB
                 const notification = await NotificationSchema.create({
                     sender_id: data.sender_id,
                     receiver_id: data.receiver_id,
@@ -375,7 +377,7 @@ module.exports = (io) => {
                     });
                     finalMessageStatus = MessageStatus.DELIVERED;
 
-                      io.to(receiverSocketData.socket_id).emit('receiveNotification', {
+                    io.to(receiverSocketData.socket_id).emit('receiveNotification', {
                         ...notification.toObject(),
                         attechment_details: attachmentDetails,
                     });
@@ -412,12 +414,37 @@ module.exports = (io) => {
                 }
                 logger.info(`Message updated successfully: ${JSON.stringify(updatedMessage)}`);
 
-                const receiverSocketData = await SocketSchema.findOne({ user_id: updatedMessage.receiver_id });
-                if (receiverSocketData) {
-                    io.to(receiverSocketData.socket_id).emit('message_updated', updatedMessage);
+                // Check if this is a broadcast message
+                if (updatedMessage.broadcast_id) {
+                    //   It's a broadcast. Find ALL recipients.
+                    const broadcast = await Broadcast.findById(updatedMessage.broadcast_id);
+                    if (!broadcast) return;
+
+                    const recipientIds = broadcast.recipients;
+                    const recipientSockets = await SocketSchema.find({ user_id: { $in: recipientIds } });
+
+                    // Emit the update to every online recipient
+                    recipientSockets.forEach(socketInfo => {
+                        io.to(socketInfo.socket_id).emit('message_updated', updatedMessage);
+                    });
+
                 } else {
-                    logger.error(`Receiver not found for message ${data.messageId}`);
+                    // ✔️ It's a one-to-one message. Use your original logic.
+                    const receiverSocketData = await SocketSchema.findOne({ user_id: updatedMessage.receiver_id });
+                    if (receiverSocketData) {
+                        io.to(receiverSocketData.socket_id).emit('message_updated', updatedMessage);
+                    } else {
+                        logger.error(`Receiver not found for message ${data.messageId}`);
+                    }
                 }
+
+
+                // const receiverSocketData = await SocketSchema.findOne({ user_id: updatedMessage.receiver_id });
+                // if (receiverSocketData) {
+                //     io.to(receiverSocketData.socket_id).emit('message_updated', updatedMessage);
+                // } else {
+                //     logger.error(`Receiver not found for message ${data.messageId}`);
+                // }
             } catch (err) {
                 socket.emit('error', { message: 'Failed to update message' });
             }
@@ -432,6 +459,44 @@ module.exports = (io) => {
             }
         });
 
+        // socket.on('delete_message', async (data) => {
+        //     try {
+        //         if (!data.messageId) {
+        //             logger.error("Message ID is missing in delete_message request");
+        //             return socket.emit('error', { message: 'Message ID is required' });
+        //         }
+
+        //         const softDeletedNotification = await NotificationSchema.findOneAndUpdate(
+        //             {
+        //                 reference_id: data.messageId,
+        //                 reference_model: "Message",
+        //             },
+        //             {
+        //                 $set: { is_deleted: true }
+        //             },
+        //             { new: true }
+        //         );
+
+        //         const deletedMessage = await deleteMessage(io, data);
+
+        //         const receiverSocketData = await SocketSchema.findOne({ user_id: deletedMessage.receiver_id });
+        //         if (receiverSocketData) {
+        //             io.to(receiverSocketData.socket_id).emit('message_deleted', deletedMessage);
+        //             if (softDeletedNotification) {
+        //                 io.to(receiverSocketData.socket_id).emit('notification_deleted', {
+        //                     notificationId: softDeletedNotification._id
+        //                 });
+        //             }
+        //         }
+
+        //         socket.emit('message_deleted', deletedMessage);
+
+        //     } catch (err) {
+        //         socket.emit('error', { message: 'Failed to delete message' });
+        //         logger.error("Error deleting message", err);
+        //     }
+        // });
+
         socket.on('delete_message', async (data) => {
             try {
                 if (!data.messageId) {
@@ -439,30 +504,57 @@ module.exports = (io) => {
                     return socket.emit('error', { message: 'Message ID is required' });
                 }
 
-                 const softDeletedNotification = await NotificationSchema.findOneAndUpdate(
-            {
-                reference_id: data.messageId, 
-                reference_model: "Message",
-            },
-            {
-                $set: { is_deleted: true } 
-            },
-            { new: true } 
-        );
-
-                const deletedMessage = await deleteMessage(io, data);
-
-                const receiverSocketData = await SocketSchema.findOne({ user_id: deletedMessage.receiver_id });
-                if (receiverSocketData) {
-                    io.to(receiverSocketData.socket_id).emit('message_deleted', deletedMessage);
-                     if (softDeletedNotification) {
-                io.to(receiverSocketData.socket_id).emit('notification_deleted', {
-                    notificationId: softDeletedNotification._id
-                });
-            }
+                // First, find the message to determine its type (broadcast or one-to-one)
+                const messageToDelete = await MessageSchema.findById(data.messageId);
+                if (!messageToDelete) {
+                    return socket.emit('error', { message: 'Message not found' });
                 }
 
-                socket.emit('message_deleted', deletedMessage);
+                // Now, perform the actual soft delete action on the message
+                const deletedMessageResponse = await deleteMessage(io, data);
+
+                // Check if this was a broadcast message
+                if (messageToDelete.broadcast_id) {
+                    // It's a broadcast. Notify ALL recipients.
+                    const broadcast = await Broadcast.findById(messageToDelete.broadcast_id);
+                    if (broadcast && broadcast.recipients) {
+                        // Soft delete ALL notifications associated with this message
+                        await NotificationSchema.updateMany(
+                            { reference_id: data.messageId, reference_model: "Message" },
+                            { $set: { is_deleted: true } }
+                        );
+
+                        const recipientIds = broadcast.recipients;
+                        const recipientSockets = await SocketSchema.find({ user_id: { $in: recipientIds } });
+
+                        // Emit the 'message_deleted' event to every online recipient
+                        recipientSockets.forEach(socketInfo => {
+                            io.to(socketInfo.socket_id).emit('message_deleted', deletedMessageResponse);
+                            // You can also emit a general notification update if your frontend needs it
+                            // io.to(socketInfo.socket_id).emit('notifications_updated');
+                        });
+                    }
+                } else {
+                    // It's a regular one-to-one message. Use the original logic.
+                    const softDeletedNotification = await NotificationSchema.findOneAndUpdate(
+                        { reference_id: data.messageId, reference_model: "Message" },
+                        { $set: { is_deleted: true } },
+                        { new: true }
+                    );
+
+                    const receiverSocketData = await SocketSchema.findOne({ user_id: messageToDelete.receiver_id });
+                    if (receiverSocketData) {
+                        io.to(receiverSocketData.socket_id).emit('message_deleted', deletedMessageResponse);
+                        if (softDeletedNotification) {
+                            io.to(receiverSocketData.socket_id).emit('notification_deleted', {
+                                notificationId: softDeletedNotification._id
+                            });
+                        }
+                    }
+                }
+
+                // Finally, confirm the deletion to the original sender
+                socket.emit('message_deleted', deletedMessageResponse);
 
             } catch (err) {
                 socket.emit('error', { message: 'Failed to delete message' });
@@ -500,14 +592,14 @@ module.exports = (io) => {
             if (message.message_status !== 'seen' && !message.is_read) {
                 await Model.findByIdAndUpdate(messageId, { message_status: 'seen', is_read: true }, { new: true });
 
-                 await NotificationSchema.findOneAndUpdate(
-                {
-                    reference_id: messageId,
-                    reference_model: "Message",
-                    receiver_id: user_id // Ensure we only mark it for the user who saw it
-                },
-                { read: true }
-            );
+                await NotificationSchema.findOneAndUpdate(
+                    {
+                        reference_id: messageId,
+                        reference_model: "Message",
+                        receiver_id: user_id // Ensure we only mark it for the user who saw it
+                    },
+                    { read: true }
+                );
 
                 // Notify sender that message has been seen
                 const senderSocketData = await SocketSchema.findOne({ user_id: message.sender_id });
@@ -569,7 +661,7 @@ module.exports = (io) => {
                     return socket.emit("error", { message: "Only admin can edit broadcast" });
                 }
 
-  
+
                 const broadcast = await Broadcast.findById(broadcast_id);
                 if (!broadcast) {
                     return socket.emit("error", { message: "Broadcast not found" });
@@ -654,7 +746,7 @@ module.exports = (io) => {
                 for (const rid of recipientIds) {
                     try {
 
-                    
+
                         await BroadcastDelivery.create({
                             message_id: savedMessage._id,
                             receiver_id: rid,
@@ -664,11 +756,12 @@ module.exports = (io) => {
                         const receiverSocket = socketMap[String(rid)];
                         if (receiverSocket) {
                             io.to(receiverSocket.socket_id).emit("chat_message", fullMessage);
+                            // io.to(receiverSocket.socket_id).emit("broadcast_message_received", fullMessage); 
                             io.to(receiverSocket.socket_id).emit("new_message", fullMessage);
                             deliveredCount++;
                         }
 
-        
+
                         await NotificationSchema.create({
                             sender_id,
                             receiver_id: rid,

@@ -972,7 +972,7 @@ const getPatients = async (req, res) => {
                 }
               }
             },
-            // visit_count: { $size: "$appointments" },
+            total_appointments: { $size: "$appointments" },
           },
         },
 
@@ -1020,6 +1020,7 @@ const getPatients = async (req, res) => {
               },
             },
             visit_count: 1,
+            total_appointments: 1,
           },
         },
       ];
@@ -1237,21 +1238,30 @@ const updateAppointmentStatus = async (req, res) => {
       // Build message based on new status
       let notifType = "";
       let defaultMsg = "";
+      let adminMessage = "";
 
+      const patient = await UserSchema.findById(patient_id);
+      const doctor = await StaffSchema.findById(userDetails?._id);
+      const admins = await UserSchema.find({ role: UserRole.ADMIN });
+
+       
       if (status === AppointmentStatus.CONFIRMED) {
         notifType = NotificationType.APPOINTMENT_CONFIRMED;
         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;
+        adminMessage = `Appointment of ${patient?.firstname} ${patient?.lastname} on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed. Assigned doctor: Dr. ${doctor?.firstname} ${doctor?.lastname}.`;
       } else if (status === AppointmentStatus.CANCELLED) {
         notifType = NotificationType.APPOINTMENT_CANCELLED;
         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been cancelled.`;
+        adminMessage = `Appointment of ${patient?.firstname} ${patient?.lastname} on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been cancelled. Assigned doctor: Dr. ${doctor?.firstname} ${doctor?.lastname}.`;
       } else if (status === AppointmentStatus.COMPLETED) {
         notifType = NotificationType.APPOINTMENT_COMPLETED;
         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been completed.`;
+        adminMessage = `Appointment of ${patient?.firstname} ${patient?.lastname} on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been completed. Assigned doctor: Dr. ${doctor?.firstname} ${doctor?.lastname}.`;
       }
 
       // Fetch patient and all admins
-      const patient = await UserSchema.findById(patient_id);
-      const admins = await UserSchema.find({ role: UserRole.ADMIN });
+      // const patient = await UserSchema.findById(patient_id);
+      // const admins = await UserSchema.find({ role: UserRole.ADMIN });
 
       const io = req.app.get("socketio");
       const notifications = [];
@@ -1285,7 +1295,7 @@ const updateAppointmentStatus = async (req, res) => {
           sender_id: userDetails?._id,
           receiver_id: admin._id,
           type: notifType,
-          message: defaultMsg,
+          message: adminMessage,
           reference_id: appointment._id,
           reference_model: "Appointment",
           read: false,

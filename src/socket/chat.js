@@ -439,11 +439,27 @@ module.exports = (io) => {
                     return socket.emit('error', { message: 'Message ID is required' });
                 }
 
+                 const softDeletedNotification = await NotificationSchema.findOneAndUpdate(
+            {
+                reference_id: data.messageId, 
+                reference_model: "Message",
+            },
+            {
+                $set: { is_deleted: true } 
+            },
+            { new: true } 
+        );
+
                 const deletedMessage = await deleteMessage(io, data);
 
                 const receiverSocketData = await SocketSchema.findOne({ user_id: deletedMessage.receiver_id });
                 if (receiverSocketData) {
                     io.to(receiverSocketData.socket_id).emit('message_deleted', deletedMessage);
+                     if (softDeletedNotification) {
+                io.to(receiverSocketData.socket_id).emit('notification_deleted', {
+                    notificationId: softDeletedNotification._id
+                });
+            }
                 }
 
                 socket.emit('message_deleted', deletedMessage);
@@ -483,6 +499,15 @@ module.exports = (io) => {
             // if (message.message_status !== 'seen') {
             if (message.message_status !== 'seen' && !message.is_read) {
                 await Model.findByIdAndUpdate(messageId, { message_status: 'seen', is_read: true }, { new: true });
+
+                 await NotificationSchema.findOneAndUpdate(
+                {
+                    reference_id: messageId,
+                    reference_model: "Message",
+                    receiver_id: user_id // Ensure we only mark it for the user who saw it
+                },
+                { read: true }
+            );
 
                 // Notify sender that message has been seen
                 const senderSocketData = await SocketSchema.findOne({ user_id: message.sender_id });

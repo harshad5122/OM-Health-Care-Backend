@@ -736,7 +736,7 @@ const getAppointmentList = async (req, res) => {
   return new Promise(async () => {
     try {
       const staffId = req.params._id;
-       const skip = req.query.skip ? parseInt(req.query.skip, 10) : 0;
+      const skip = req.query.skip ? parseInt(req.query.skip, 10) : 0;
       const limit = (req.query.limit && parseInt(req.query.limit, 10) > 0)
         ? parseInt(req.query.limit, 10)
         : null;
@@ -752,7 +752,7 @@ const getAppointmentList = async (req, res) => {
         staff_id: staffId,
       };
 
-       const match = {
+      const match = {
         staff_id: new mongoose.Types.ObjectId(staffId),
       };
 
@@ -771,7 +771,7 @@ const getAppointmentList = async (req, res) => {
           : { $in: statusArray };
       }
 
-       if (search) {
+      if (search) {
         match.$or = [
           { "patientDetails.firstname": { $regex: search, $options: "i" } },
           { "patientDetails.lastname": { $regex: search, $options: "i" } },
@@ -781,11 +781,11 @@ const getAppointmentList = async (req, res) => {
       }
 
 
-       const pipeline = [
+      const pipeline = [
         { $match: { staff_id: new mongoose.Types.ObjectId(staffId) } },
         {
           $lookup: {
-            from: "users", 
+            from: "users",
             localField: "patient_id",
             foreignField: "_id",
             as: "patientDetails",
@@ -795,24 +795,24 @@ const getAppointmentList = async (req, res) => {
         {
           $unwind: {
             path: "$patientDetails",
-            preserveNullAndEmptyArrays: true, 
+            preserveNullAndEmptyArrays: true,
           },
         },
-        
-      
+
+
         { $match: match },
 
-   
+
         { $sort: { createdAt: -1 } },
-        
-   
+
+
         {
           $facet: {
 
             data: [
-             
+
               ...(limit !== null ? [{ $skip: skip }, { $limit: limit }] : []),
-           
+
               {
                 $project: {
                   _id: 1,
@@ -861,7 +861,11 @@ const getAppointmentList = async (req, res) => {
 
       return responseData.success(
         res,
-        appointments,
+        // appointments,
+        {
+          rows: appointments, // Send data under a 'rows' key
+          total_count: totalCount, // Send count in the same object
+        },
         messageConstants.DATA_FETCHED_SUCCESSFULLY
       );
 
@@ -1031,15 +1035,15 @@ const getPatients = async (req, res) => {
         UserSchema.countDocuments(match),
         // Count total unique patients matching filters
 
-     
+
       ]);
 
       return responseData.success(
         res,
-        patients,
+        // patients,
         messageConstants.FETCHED_SUCCESSFULLY,
         {
-          // rows: patients,
+          rows: patients,
           total_count: totalCount,
         },
 
@@ -1241,10 +1245,10 @@ const updateAppointmentStatus = async (req, res) => {
       let adminMessage = "";
 
       const patient = await UserSchema.findById(patient_id);
-      const doctor = await StaffSchema.findById(userDetails?._id);
+      const doctor = await StaffSchema.findById(appointment?.staff_id);
       const admins = await UserSchema.find({ role: UserRole.ADMIN });
 
-       
+
       if (status === AppointmentStatus.CONFIRMED) {
         notifType = NotificationType.APPOINTMENT_CONFIRMED;
         defaultMsg = `Your appointment on ${formattedDate} (${formattedStartTime} - ${formattedEndTime}) has been confirmed.`;

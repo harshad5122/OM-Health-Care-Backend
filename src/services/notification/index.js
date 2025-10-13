@@ -16,7 +16,7 @@ const getNotifications = async (req, res) => {
                     path: 'sender_id',
                     select: 'firstname lastname',
                 })
-                .lean();
+                .lean().sort({ createdAt: -1 });
 
            const formattedNotifications = notofications.map((n) => {
         if (n.type === 'MESSAGE' && n.sender_id) {

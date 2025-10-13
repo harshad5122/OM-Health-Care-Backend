@@ -220,8 +220,12 @@ const updateLeaveStatus = async (req, res) => {
       const timeRange = leave?.leave_type;
       const defaultMsg =
         status === leaveStatus.CONFIRMED
-          ? `Your leave from ${dateRange}${timeRange} has been confirmed.`
-          : `Your leave from ${dateRange}${timeRange} has been declined.`;
+          ? 
+          // `Your leave from ${dateRange} ${timeRange} has been confirmed.`
+          `Your leave has been confirmed from ${dateRange} during ${timeRange}.`
+          : 
+          // `Your leave from ${dateRange} ${timeRange} has been declined.`;
+          `Your leave has been declined from ${dateRange} during ${timeRange}`;
       // 7. create notifications (one per user) and emit via socket if online
       const createdNotifications = [];
       const io = req.app?.get("socketio"); // your socket instance (may be undefined in some tests)

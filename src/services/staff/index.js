@@ -162,11 +162,11 @@ const getDoctor = async (req, userDetails, res) => {
                   workExperience_totalYears: "$workExperience.totalYears",
                   workExperience_lastHospital: "$workExperience.lastHospital",
                   workExperience_position: "$workExperience.position",
-                  father_name: "$familyDetails.father.name",
-                  mother_name: "$familyDetails.mother.name",
-                  emergencyContact_name: "$familyDetails.emergencyContact.name",
-                  emergencyContact_relation: "$familyDetails.emergencyContact.relation",
-                  emergencyContact_contact: "$familyDetails.emergencyContact.contact",
+                  "Father Name": "$familyDetails.father.name",
+                  "Mother Name": "$familyDetails.mother.name",
+                  "Emergency Contact Name": "$familyDetails.emergencyContact.name",
+                  "Emergency Contact Relation": "$familyDetails.emergencyContact.relation",
+                  "Emergency Contact": "$familyDetails.emergencyContact.contact",
                 }
               }
             ],

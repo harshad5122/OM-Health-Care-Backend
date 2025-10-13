@@ -65,6 +65,8 @@ const urlConstants = {
     UPDATE_LEAVE_STATUS:'/update-leave-status',
     UPDATE_LEAVE: '/update-leave/:_id',
     DELETE_LEAVE: '/delete-leave/:_id',
+    // Dashboard
+    GET_CHARTS_DATA: '/get-charts'
 
 }
 

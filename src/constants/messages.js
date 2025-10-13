@@ -34,7 +34,8 @@ const messageConstants = {
     CHANGE_PASSWORD_FAILED: "Failed to change password",
     FETCHED_SUCCESSFULLY: "Data fatched successfully",
     UPDATED_SUCCESSDULLY: "Updated successfully",
-    DATA_SAVED_SUCCESSFULLY: "Data has been saved successfully"
+    DATA_SAVED_SUCCESSFULLY: "Data has been saved successfully",
+    DATA_FETCHED_SUCCESSFULLY: "Data fetched successfully",
 
 
 }

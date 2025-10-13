@@ -12,10 +12,28 @@ const getNotifications = async (req, res) => {
                 receiver_id: userDetails?._id,
                 read: false
             })
+                .populate({
+                    path: 'sender_id',
+                    select: 'firstname lastname',
+                })
+                .lean();
+
+           const formattedNotifications = notofications.map((n) => {
+        if (n.type === 'MESSAGE' && n.sender_id) {
+          const { _id, firstname = '', lastname = '' } = n.sender_id;
+          n.sender_id = _id;
+          n.sender_name = `${firstname} ${lastname}`.trim();
+        } else if (n.sender_id && typeof n.sender_id === 'object' && n.sender_id._id) {
+          n.sender_id = n.sender_id._id;
+        }
+
+        return n;
+      });
 
             return responseData.success(
                 res,
-                notofications,
+                // notofications,
+                formattedNotifications,
                 messageConstants.FETCHED_SUCCESSFULLY
             );
         } catch (error) {

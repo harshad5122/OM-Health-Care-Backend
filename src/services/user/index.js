@@ -2,11 +2,12 @@
 const UserSchema = require('../../models/user');
 const MessageSchema = require('../../models/message');
 const StaffSchema = require('../../models/staff');
+const AppointmentSchema = require('../../models/appointment');
 const NotificationSchema = require('../../models/notification');
 const SocketSchema = require('../../models/socket');
 const { responseData, messageConstants, mailTemplateConstants, mailSubjectConstants } = require('../../constants');
 const { logger, mail } = require('../../utils');
-const { UserTypes, MessageStatus, NotificationType } = require('../../constants/enum');
+const { UserTypes, MessageStatus, NotificationType, PatientStatus } = require('../../constants/enum');
 const { cryptoGraphy } = require('../../middlewares');
 const { sendWhatsAppMessage } = require("../../utils/whatsapp");
 
@@ -472,6 +473,29 @@ const editUser = async (updateData, userId, res, req) => {
             logger.info(`Updated user profile successfully for userId: ${userId}`);
 
             if (newDoctorId && previousDoctorId?.toString() !== newDoctorId?.toString()) {
+
+                const lastAppointment = await AppointmentSchema.findOneAndUpdate(
+                    { patient_id: updatedUser._id, staff_id: previousDoctorId },
+                    {
+                        $set: {
+                            patient_status: PatientStatus.DISCONTINUE,
+                            patient_message: "Doctor changed by admin",
+                        },
+                    },
+                    { sort: { createdAt: -1 } } // Update the most recent one
+                );
+
+                if (lastAppointment) {
+                    logger.info(
+                        `Marked last appointment as DISCONTINUE for patient ${updatedUser._id} and doctor ${previousDoctorId}`
+                    );
+                } else {
+                    logger.info(
+                        `No appointment found to mark DISCONTINUE for patient ${updatedUser._id} and doctor ${previousDoctorId}`
+                    );
+                }
+
+
                 const assignedDoctor = await StaffSchema.findById(newDoctorId);
                 if (assignedDoctor) {
                     const doctorUser = await UserSchema.findOne({ staff_id: assignedDoctor._id });

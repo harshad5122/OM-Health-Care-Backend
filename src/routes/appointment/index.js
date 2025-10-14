@@ -11,4 +11,5 @@ module.exports = (app) => {
     app.put(urlConstants?.UPDATE_APPOINTMENT_STATUS, jsonWebToken.validateToken, appointmentController?.updateAppointmentStatus)
     app.put(urlConstants?.UPDATE_APPOINTMENT, jsonWebToken.validateToken, appointmentController?.updateAppointment)
     app.put(urlConstants?.UPDATE_PATIENT_STATUS, jsonWebToken.validateToken, appointmentController?.updatePatientStatus)
+    app.get(urlConstants?.GET_PATIENTS_BY_ASSIGN_DOCTOR, jsonWebToken.validateToken, appointmentController?.getPatientsByAssignDoctor)
 }

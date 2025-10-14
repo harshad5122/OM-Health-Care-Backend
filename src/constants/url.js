@@ -56,6 +56,7 @@ const urlConstants = {
     UPDATE_APPOINTMENT_STATUS: '/update-status',
     UPDATE_APPOINTMENT: '/update-appointment',
     UPDATE_PATIENT_STATUS: '/update-patient-status/:_id',
+    GET_PATIENTS_BY_ASSIGN_DOCTOR: '/get-patients-by-assign-doctor',
 
     GET_NOTIFICATION: '/notification',
     MAEK_SEEN: '/mark-seen/:_id',
